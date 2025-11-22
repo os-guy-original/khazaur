@@ -1,6 +1,6 @@
 # Maintainer: os-guy-original <https://github.com/os-guy-original>
 pkgname=khazaur-git
-pkgver=0.1.0.r4.gbcc948a
+pkgver=0.1.0.r5.g639f46b
 pkgrel=1
 pkgdesc="Unified package manager for Arch Linux - AUR, repos, Flatpak, Snap, and Debian packages"
 arch=('x86_64')
@@ -35,6 +35,9 @@ build() {
     cd "$srcdir/${pkgname%-git}"
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR="$srcdir/target"
+    # Force usage of vendored libraries to avoid system linking mismatches
+    export LIBGIT2_NO_PKG_CONFIG=1
+    export LIBSSH2_SYS_USE_PKG_CONFIG=0
     cargo build --frozen --release --all-features
 }
 

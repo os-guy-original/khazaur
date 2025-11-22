@@ -53,7 +53,7 @@ Written in Rust for performance and reliability.
 
 ```bash
 git clone https://github.com/os-guy-original/khazaur.git
-cd khazaur
+cd khazaur/build
 makepkg -si
 ```
 
