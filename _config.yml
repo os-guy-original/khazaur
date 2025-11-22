@@ -29,6 +29,25 @@ sass:
   sass_dir: _sass
   style: compressed
 
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .git
+  - .gitignore
+  - Cargo.toml
+  - Cargo.lock
+  - PKGBUILD
+  - PKGBUILD-git
+  - src
+  - target
+
 # SEO
 tagline: Multi-source package management for Arch Linux
 keywords: arch linux, aur, package manager, flatpak, snap, debian, rust

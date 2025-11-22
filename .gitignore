@@ -51,6 +51,7 @@ _site/
 .jekyll-cache/
 .jekyll-metadata
 vendor/
+Gemfile.lock
 
 # Package files
 *.pkg.tar.zst
