@@ -57,25 +57,20 @@ cd khazaur
 makepkg -si
 ```
 
-### From Git (Development Version)
-
-```bash
-git clone https://github.com/os-guy-original/khazaur.git
-cd khazaur
-makepkg -si -p PKGBUILD-git
-```
-
 ### Manual Build
 
 Requirements:
 - Arch Linux or Arch-based distribution
 - Rust 1.70+
 - pacman and makepkg
+- libgit2, libssh2, openssl, zlib (build dependencies)
 - Privilege escalation tool (pkexec, sudo, or doas)
 
 ```bash
 git clone https://github.com/os-guy-original/khazaur.git
 cd khazaur
+export LIBGIT2_SYS_USE_PKG_CONFIG=1
+export LIBSSH2_SYS_USE_PKG_CONFIG=1
 cargo build --release
 sudo install -Dm755 target/release/khazaur /usr/bin/khazaur
 ```

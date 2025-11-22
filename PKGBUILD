@@ -1,46 +1,62 @@
 # Maintainer: os-guy-original <https://github.com/os-guy-original>
-pkgname=khazaur
-pkgver=0.1.0
+pkgname=khazaur-git
+pkgver=0.1.0.r4.gbcc948a
 pkgrel=1
 pkgdesc="Unified package manager for Arch Linux - AUR, repos, Flatpak, Snap, and Debian packages"
 arch=('x86_64')
 url="https://github.com/os-guy-original/khazaur"
 license=('GPL3')
-depends=('pacman' 'sudo')
-makedepends=('rust' 'cargo' 'libgit2' 'libssh2' 'openssl' 'zlib' 'cmake' 'pkgconf')
+depends=('pacman' 'sudo' 'openssl' 'libssh2' 'zlib')
+makedepends=('rust' 'cargo' 'git')
+provides=("${pkgname%-git}")
+conflicts=("${pkgname%-git}")
 optdepends=(
     'flatpak: for Flatpak application support'
     'snapd: for Snap package support'
     'debtap: for Debian package conversion'
     'git: for faster AUR package downloads'
 )
-source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+source=("git+https://github.com/os-guy-original/khazaur.git")
 sha256sums=('SKIP')
 
+pkgver() {
+    cd "$srcdir/${pkgname%-git}"
+    git describe --long --tags 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+prepare() {
+    cd "$srcdir/${pkgname%-git}"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
+}
+
 build() {
-    cd "$pkgname-$pkgver"
-    export LIBGIT2_SYS_USE_PKG_CONFIG=1
-    export LIBSSH2_SYS_USE_PKG_CONFIG=1
-    cargo build --release --locked
+    cd "$srcdir/${pkgname%-git}"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR="$srcdir/target"
+    cargo build --frozen --release --all-features
 }
 
 check() {
-    cd "$pkgname-$pkgver"
-    cargo test --release --locked
+    cd "$srcdir/${pkgname%-git}"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR="$srcdir/target"
+    cargo test --frozen --all-features
 }
 
 package() {
-    cd "$pkgname-$pkgver"
+    cd "$srcdir/${pkgname%-git}"
     
     # Install binary
-    install -Dm755 "target/release/$pkgname" "$pkgdir/usr/bin/$pkgname"
+    install -Dm755 "$srcdir/target/release/${pkgname%-git}" "$pkgdir/usr/bin/${pkgname%-git}"
     
     # Install documentation
-    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
-    install -Dm644 docs/COMMANDS.md "$pkgdir/usr/share/doc/$pkgname/COMMANDS.md"
-    install -Dm644 docs/CONFIGURATION.md "$pkgdir/usr/share/doc/$pkgname/CONFIGURATION.md"
-    install -Dm644 docs/RETRY.md "$pkgdir/usr/share/doc/$pkgname/RETRY.md"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/${pkgname%-git}/README.md"
+    if [ -d "docs" ]; then
+        install -Dm644 docs/*.md "$pkgdir/usr/share/doc/${pkgname%-git}/"
+    fi
     
     # Install license
-    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/${pkgname%-git}/LICENSE"
 }

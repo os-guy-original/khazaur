@@ -86,7 +86,7 @@ layout: default
   
   <div class="install-steps">
     <div class="step">
-      <h3>Using PKGBUILD</h3>
+      <h3>Using PKGBUILD (Recommended)</h3>
       <div class="code-block">
         <code>git clone https://github.com/os-guy-original/khazaur.git
 cd khazaur
@@ -95,12 +95,14 @@ makepkg -si</code>
     </div>
 
     <div class="step">
-      <h3>Build from source</h3>
+      <h3>Manual build</h3>
       <div class="code-block">
         <code>git clone https://github.com/os-guy-original/khazaur.git
 cd khazaur
+export LIBGIT2_SYS_USE_PKG_CONFIG=1
+export LIBSSH2_SYS_USE_PKG_CONFIG=1
 cargo build --release
-sudo cp target/release/khazaur /usr/local/bin/</code>
+sudo install -Dm755 target/release/khazaur /usr/bin/khazaur</code>
       </div>
     </div>
 
@@ -110,6 +112,7 @@ sudo cp target/release/khazaur /usr/local/bin/</code>
         <li>Arch Linux or Arch-based distribution</li>
         <li>Rust 1.70 or newer</li>
         <li>pacman and makepkg</li>
+        <li>libgit2, libssh2, openssl, zlib</li>
         <li>pkexec, sudo, or doas</li>
       </ul>
     </div>

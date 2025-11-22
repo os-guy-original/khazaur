@@ -54,7 +54,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Git operations
-git2 = "0.19"
+git2 = { version = "0.19", features = ["vendored-libgit2"] }
 
 # Checksums
 md5 = "0.7"
