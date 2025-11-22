@@ -25,6 +25,9 @@ repository: os-guy-original/khazaur
 
 # Build settings
 markdown: kramdown
+sass:
+  sass_dir: _sass
+  style: compressed
 
 # SEO
 tagline: Multi-source package management for Arch Linux
