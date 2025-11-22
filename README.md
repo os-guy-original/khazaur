@@ -47,6 +47,11 @@ Written in Rust for performance and reliability.
 - MD5 verification for Debian packages
 - Supports pkexec, sudo, or doas
 
+**Developer Experience**
+- Shell completions for bash, zsh, fish, PowerShell, and elvish
+- Colored output with clear status indicators
+- Interactive package selection
+
 ## Installation
 
 
@@ -84,6 +89,12 @@ khazaur -Ss firefox
 # Install a package
 khazaur -S firefox
 
+# Install from specific source (pacman-style)
+khazaur -S aur/yay
+khazaur -S core/linux
+khazaur -S flatpak/org.mozilla.firefox
+khazaur -S snap/discord
+
 # Update package databases
 khazaur -Sy
 
@@ -107,9 +118,19 @@ khazaur -Ss discord --snap
 khazaur -Ss htop --debian
 khazaur -Ss firefox --repo
 
+# Install from specific source (two methods)
+# Method 1: Using flags
+khazaur -S yay --aur
+khazaur -S firefox --flatpak
+
+# Method 2: Using source prefix (pacman-style)
+khazaur -S aur/yay
+khazaur -S flatpak/org.mozilla.firefox
+khazaur -S snap/discord
+khazaur -S core/linux extra/firefox
+
 # Update specific sources
 khazaur -Sy --repo          # Update pacman databases only
-khazaur -Sy --snap          # Refresh snap packages only
 khazaur -Sy --debian        # Update Debian index and debtap
 ```
 
@@ -185,11 +206,12 @@ Working:
 - [x] Package removal
 - [x] Conflict handling
 - [x] Configuration file
+- [x] AUR package upgrades
 
-In progress:
-- [ ] AUR package upgrades
-- [ ] Shell completions
-- [ ] Parallel AUR builds
+Completed:
+- [x] Shell completions
+
+Note: Debian packages installed via debtap are converted to pacman packages and managed through pacman thereafter.
 
 ## Contributing
 

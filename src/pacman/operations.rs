@@ -40,25 +40,6 @@ pub fn install_packages(package_names: &[String], extra_args: &[String]) -> Resu
     Ok(())
 }
 
-/// Upgrade all packages
-pub fn upgrade_system(extra_args: &[String]) -> Result<()> {
-    info!("Upgrading system...");
-    
-    let mut args = vec!["pacman", "-Syu"];
-    let extra_str_args: Vec<&str> = extra_args.iter().map(|s| s.as_str()).collect();
-    args.extend(&extra_str_args);
-    
-    let status = Command::new("sudo")
-        .args(&args)
-        .status()?;
-    
-    if !status.success() {
-        return Err(KhazaurError::PacmanFailed("System upgrade failed".to_string()));
-    }
-    
-    Ok(())
-}
-
 /// Remove packages
 pub fn remove_packages(package_names: &[String], extra_args: &[String]) -> Result<()> {
     if package_names.is_empty() {

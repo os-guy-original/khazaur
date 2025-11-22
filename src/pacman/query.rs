@@ -162,3 +162,83 @@ pub fn search_installed_packages(query: &str) -> Result<Vec<String>> {
     
     Ok(matches)
 }
+
+/// Get all installed packages with their versions
+pub fn get_installed_packages() -> Result<Vec<(String, String)>> {
+    let output = Command::new("pacman")
+        .args(["-Q"])
+        .output()?;
+    
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let packages: Vec<(String, String)> = stdout
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 {
+                Some((parts[0].to_string(), parts[1].to_string()))
+            } else {
+                None
+            }
+        })
+        .collect();
+    
+    Ok(packages)
+}
+
+/// Get all installed AUR packages (packages not in official repos)
+pub fn get_installed_aur_packages() -> Result<Vec<(String, String)>> {
+    let output = Command::new("pacman")
+        .args(["-Qm"])
+        .output()?;
+    
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let packages: Vec<(String, String)> = stdout
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 {
+                Some((parts[0].to_string(), parts[1].to_string()))
+            } else {
+                None
+            }
+        })
+        .collect();
+    
+    Ok(packages)
+}
+
+/// Get available repository package updates
+pub fn get_repo_updates() -> Result<Vec<(String, String, String)>> {
+    // Run pacman -Qu to get available updates
+    let output = Command::new("pacman")
+        .args(["-Qu"])
+        .output()?;
+    
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let updates: Vec<(String, String, String)> = stdout
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 4 {
+                // Format: package old_version -> new_version
+                Some((parts[0].to_string(), parts[1].to_string(), parts[3].to_string()))
+            } else {
+                None
+            }
+        })
+        .collect();
+    
+    Ok(updates)
+}

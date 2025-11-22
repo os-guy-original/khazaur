@@ -1,4 +1,4 @@
-use crate::aur::{download, AurClient};
+use crate::aur::{download, AurClient, AurPackage};
 use crate::build;
 use crate::cli::{PackageSource, find_package_sources};
 use crate::config::Config;
@@ -27,37 +27,54 @@ pub async fn install(
         return Ok(());
     }
 
-    // Handle .deb files first (before showing "Finding Package(s)" header)
-    let mut non_deb_packages = Vec::new();
+    // Parse packages and handle source prefixes (e.g., aur/package, repo/package)
+    let mut parsed_packages = Vec::new();
+    let mut deb_files = Vec::new();
     
     for pkg_name in packages {
         if pkg_name.ends_with(".deb") {
-            // Check and prompt for debtap if needed
-            if !crate::debtap::is_available() {
-                crate::cli::optional_deps::check_and_prompt_debtap(config).await?;
-            }
-            
-            if crate::debtap::is_available() {
-                if let Err(e) = crate::debtap::install_deb(pkg_name).await {
-                    eprintln!("{}", ui::error(&format!("Failed to install .deb package {}: {}", pkg_name, e)));
-                }
+            deb_files.push(pkg_name.clone());
+        } else if pkg_name.contains('/') {
+            // Parse source prefix (e.g., aur/package, core/package, flatpak/app)
+            let parts: Vec<&str> = pkg_name.splitn(2, '/').collect();
+            if parts.len() == 2 {
+                let source = parts[0];
+                let name = parts[1].to_string();
+                parsed_packages.push((name, Some(source.to_string())));
             } else {
-                eprintln!("{}", ui::error(&format!("Skipping {}: debtap not available", pkg_name)));
+                parsed_packages.push((pkg_name.clone(), None));
             }
         } else {
-            non_deb_packages.push(pkg_name.clone());
+            parsed_packages.push((pkg_name.clone(), None));
+        }
+    }
+    
+    // Handle .deb files first
+    for deb_file in deb_files {
+        // Check and prompt for debtap if needed
+        if !crate::debtap::is_available() {
+            crate::cli::optional_deps::check_and_prompt_debtap(config).await?;
+        }
+        
+        if crate::debtap::is_available() {
+            if let Err(e) = crate::debtap::install_deb(&deb_file).await {
+                eprintln!("{}", ui::error(&format!("Failed to install .deb package {}: {}", deb_file, e)));
+            }
+        } else {
+            eprintln!("{}", ui::error(&format!("Skipping {}: debtap not available", deb_file)));
         }
     }
     
     // If we only had .deb files, we're done
-    if non_deb_packages.is_empty() {
+    if parsed_packages.is_empty() {
         return Ok(());
     }
 
     println!("{}", ui::section_header("Finding Package(s)"));
     
-    // Determine what sources we'll be searching
-    let search_all = !only_aur && !only_repos && !only_flatpak && !only_snap && !only_debian;
+    // Determine what sources we'll be searching (considering explicit source prefixes)
+    let has_explicit_sources = parsed_packages.iter().any(|(_, src)| src.is_some());
+    let search_all = !only_aur && !only_repos && !only_flatpak && !only_snap && !only_debian && !has_explicit_sources;
     
     // Prompt for optional dependencies BEFORE searching if needed
     if search_all || only_flatpak {
@@ -88,29 +105,58 @@ pub async fn install(
     let mut snap_packages = Vec::new();
     let mut debian_packages = Vec::new();
 
-    // Find all non-deb packages
-    for pkg_name in &non_deb_packages {
+    // Find all packages
+    for (pkg_name, explicit_source) in &parsed_packages {
+        // Determine search flags based on explicit source or command flags
+        let (search_aur, search_repos, search_flatpak, search_snap, search_debian) = 
+            if let Some(source) = explicit_source {
+                // Explicit source specified (e.g., aur/package)
+                match source.to_lowercase().as_str() {
+                    "aur" => (true, false, false, false, false),
+                    "repo" | "core" | "extra" | "multilib" | "community" => (false, true, false, false, false),
+                    "flatpak" => (false, false, true, false, false),
+                    "snap" => (false, false, false, true, false),
+                    "debian" => (false, false, false, false, true),
+                    _ => {
+                        // Unknown source, treat as repo name and search repos
+                        (false, true, false, false, false)
+                    }
+                }
+            } else {
+                // No explicit source, use command flags or search all
+                (
+                    only_aur || search_all,
+                    only_repos || search_all,
+                    only_flatpak || search_all,
+                    only_snap || search_all,
+                    only_debian || search_all,
+                )
+            };
 
         // Find all possible sources for this package
         let candidates = find_package_sources(
             pkg_name,
             &client,
             config,
-            only_aur,
-            only_repos,
-            only_flatpak,
-            only_snap,
-            only_debian,
+            search_aur,
+            search_repos,
+            search_flatpak,
+            search_snap,
+            search_debian,
             no_timeout,
         ).await?;
         
         spinner.finish_and_clear();
 
         let selected_index = if candidates.is_empty() {
-            warn!("Package {} not found in any source", pkg_name);
+            if explicit_source.is_some() {
+                warn!("Package {} not found in {}", pkg_name, explicit_source.as_ref().unwrap());
+            } else {
+                warn!("Package {} not found in any source", pkg_name);
+            }
             continue;
-        } else if candidates.len() == 1 {
-            // Only one source, use it automatically
+        } else if candidates.len() == 1 || explicit_source.is_some() {
+            // Only one source, or explicit source specified - use it automatically
             0
         } else {
             // Multiple sources, ask user
@@ -344,22 +390,276 @@ pub async fn install(
     Ok(())
 }
 
-/// Upgrade the entire system
-pub async fn upgrade_system(_config: &mut Config, _noconfirm: bool) -> Result<()> {
-    println!("{}", ui::section_header("System Upgrade"));
-
-    // First upgrade repo packages
-    println!("{}", ui::info("Upgrading repository packages..."));
-    pacman::upgrade_system(&Vec::new())?;
-
-    // TODO: Upgrade AUR packages
-    // This would require:
-    // 1. List all installed AUR packages
-    // 2. Check for updates
-    // 3. Rebuild and reinstall updated packages
+/// Upgrade the entire system (repo + AUR + Debian packages)
+pub async fn upgrade_system(config: &mut Config, noconfirm: bool) -> Result<()> {
+    println!("\n{}", ui::info("Checking for updates..."));
     
-    println!("\n{}", ui::info("AUR package upgrades not yet implemented"));
-    println!("{}", ui::success("System upgrade complete"));
+    // Get repository updates
+    let repo_updates = pacman::get_repo_updates()?;
+    
+    // Get AUR updates
+    let installed_aur = pacman::get_installed_aur_packages()?;
+    let mut aur_updates = Vec::new();
+    
+    if !installed_aur.is_empty() {
+        let client = AurClient::new()?;
+        let package_names: Vec<String> = installed_aur.iter().map(|(name, _)| name.clone()).collect();
+        
+        let spinner = ui::spinner("Querying AUR...");
+        match client.info_batch(&package_names).await {
+            Ok(aur_packages) => {
+                spinner.finish_and_clear();
+                
+                // Compare versions and find packages that need updates
+                for (installed_name, installed_version) in &installed_aur {
+                    if let Some(aur_pkg) = aur_packages.iter().find(|p| &p.name == installed_name) {
+                        if needs_update(installed_version, &aur_pkg.version)? {
+                            aur_updates.push((installed_name.clone(), installed_version.clone(), aur_pkg.clone()));
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                spinner.finish_and_clear();
+                eprintln!("{}", ui::warning(&format!("Failed to query AUR: {}", e)));
+            }
+        }
+    }
+    
+    // Get Debian updates (if debtap is available)
+    let mut debian_updates = Vec::new();
+    if crate::debtap::is_available() {
+        let spinner = ui::spinner("Checking Debian packages...");
+        match crate::debian::check_debian_updates().await {
+            Ok(updates) => {
+                spinner.finish_and_clear();
+                debian_updates = updates;
+            }
+            Err(e) => {
+                spinner.finish_and_clear();
+                eprintln!("{}", ui::warning(&format!("Failed to check Debian updates: {}", e)));
+            }
+        }
+    }
+    
+    // Show all available updates in unified format
+    let total_updates = repo_updates.len() + aur_updates.len() + debian_updates.len();
+    
+    if total_updates == 0 {
+        println!("{}", ui::success("System is up to date"));
+        return Ok(());
+    }
+    
+    println!("\n{} {}", "::".bright_blue().bold(), format!("Packages ({}):", total_updates).bold());
+    
+    // Show repo updates
+    for (name, old_ver, new_ver) in &repo_updates {
+        println!("  {} {} -> {}", 
+            name.bold(),
+            old_ver.dimmed(),
+            new_ver.green()
+        );
+    }
+    
+    // Show AUR updates
+    for (name, old_ver, aur_pkg) in &aur_updates {
+        println!("  {} {} -> {} {}", 
+            name.bold(),
+            old_ver.dimmed(),
+            aur_pkg.version.green(),
+            "[AUR]".bright_cyan()
+        );
+    }
+    
+    // Show Debian updates
+    for (name, old_ver, new_ver, _) in &debian_updates {
+        println!("  {} {} -> {} {}", 
+            name.bold(),
+            old_ver.dimmed(),
+            new_ver.green(),
+            "[Debian]".bright_magenta()
+        );
+    }
+    
+    // Calculate download size for repo packages (if possible)
+    println!("\n{} Repository: {}, AUR: {}, Debian: {}", 
+        "::".bright_blue().bold(),
+        repo_updates.len(),
+        aur_updates.len(),
+        debian_updates.len()
+    );
+    
+    // Ask for confirmation unless noconfirm is set
+    if !noconfirm {
+        use dialoguer::{theme::ColorfulTheme, Confirm};
+        
+        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt("Proceed with upgrade?")
+            .default(true)
+            .interact()?;
+        
+        if !confirmed {
+            println!("{}", ui::warning("Upgrade cancelled"));
+            return Ok(());
+        }
+    }
+    
+    // Upgrade repository packages first
+    if !repo_updates.is_empty() {
+        println!("\n{} {}", "::".bright_blue().bold(), "Upgrading repository packages...".bold());
+        let repo_names: Vec<String> = repo_updates.iter().map(|(name, _, _)| name.clone()).collect();
+        let extra_args = if noconfirm { vec!["--noconfirm".to_string()] } else { vec![] };
+        pacman::install_packages(&repo_names, &extra_args)?;
+    }
+    
+    // Upgrade AUR packages
+    if !aur_updates.is_empty() {
+        println!("\n{} {}", "::".bright_blue().bold(), "Upgrading AUR packages...".bold());
+        
+        let client = AurClient::new()?;
+        let aur_pkgs: Vec<AurPackage> = aur_updates.iter().map(|(_, _, pkg)| pkg.clone()).collect();
+        
+        // Download all PKGBUILDs
+        println!("\n{} {}", "::".bright_blue().bold(), "Downloading PKGBUILDs...".bold());
+        let mut package_dirs = Vec::new();
+        
+        for pkg in &aur_pkgs {
+            let spinner = ui::spinner(&format!("Downloading {}...", pkg.name));
+            match download::download_package(&client, &pkg.name, config).await {
+                Ok(pkg_dir) => {
+                    spinner.finish_with_message(format!("✓ {}", pkg.name));
+                    package_dirs.push(pkg_dir);
+                }
+                Err(e) => {
+                    spinner.finish_and_clear();
+                    eprintln!("{}", ui::error(&format!("Failed to download {}: {}", pkg.name, e)));
+                    continue;
+                }
+            }
+        }
+        
+        // Review PKGBUILDs if not noconfirm
+        let mut packages_to_build: Vec<usize> = Vec::new();
+        
+        if !noconfirm && config.review_pkgbuild {
+            println!("\n{} {}", "::".bright_blue().bold(), "Reviewing PKGBUILDs...".bold());
+            
+            for (idx, pkg) in aur_pkgs.iter().enumerate() {
+                if idx >= package_dirs.len() {
+                    continue;
+                }
+                
+                println!("\n{} {} {}", 
+                    "::".bright_blue().bold(), 
+                    format!("({}/{})", idx + 1, aur_pkgs.len()).bright_black(),
+                    format!("Review {}...", pkg.name).bold()
+                );
+                
+                let pkgbuild_path = package_dirs[idx].join("PKGBUILD");
+                let should_continue = ui::view_pkgbuild_interactive(&pkgbuild_path, config)?;
+                if should_continue {
+                    packages_to_build.push(idx);
+                } else {
+                    println!("{} {}", "::".yellow().bold(), format!("Skipping {}", pkg.name).bold());
+                }
+            }
+            
+            if packages_to_build.is_empty() {
+                println!("\n{} {}", "::".yellow().bold(), "No AUR packages selected for upgrade".bold());
+                return Ok(());
+            }
+        } else {
+            // Build all packages
+            packages_to_build = (0..aur_pkgs.len().min(package_dirs.len())).collect();
+        }
+        
+        // Build and install packages
+        println!("\n{} {}", "::".bright_blue().bold(), "Building and installing AUR packages...".bold());
+        let mut upgraded_count = 0;
+        
+        for &idx in &packages_to_build {
+            let pkg = &aur_pkgs[idx];
+            let pkg_dir = &package_dirs[idx];
+            
+            println!("\n{} {}", "::".bright_cyan(), format!("Building {}...", pkg.name).bold());
+            
+            match build::build_and_install(pkg_dir, true) {
+                Ok(_) => {
+                    println!("{}", ui::success(&format!("{} upgraded successfully", pkg.name)));
+                    upgraded_count += 1;
+                }
+                Err(e) => {
+                    eprintln!("{}", ui::error(&format!("Build failed for {}: {}", pkg.name, e)));
+                }
+            }
+        }
+        
+        if upgraded_count > 0 {
+            println!("\n{} {}", 
+                "::".bright_green().bold(), 
+                format!("Successfully upgraded {} AUR package(s)", upgraded_count).bold()
+            );
+        }
+    }
+    
+    // Upgrade Debian packages
+    if !debian_updates.is_empty() {
+        println!("\n{} {}", "::".bright_blue().bold(), "Upgrading Debian packages...".bold());
+        
+        let mut upgraded_count = 0;
+        
+        for (name, _, _, debian_pkg) in &debian_updates {
+            println!("\n{} {}", "::".bright_cyan(), format!("Downloading and converting {}...", name).bold());
+            
+            // Download .deb file
+            match crate::debian::download_debian(debian_pkg).await {
+                Ok(deb_path) => {
+                    // Convert and install with debtap
+                    match crate::debtap::install_deb(deb_path.to_str().unwrap()).await {
+                        Ok(_) => {
+                            println!("{}", ui::success(&format!("{} upgraded successfully", name)));
+                            upgraded_count += 1;
+                        }
+                        Err(e) => {
+                            eprintln!("{}", ui::error(&format!("Failed to install {}: {}", name, e)));
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{}", ui::error(&format!("Failed to download {}: {}", name, e)));
+                }
+            }
+        }
+        
+        if upgraded_count > 0 {
+            println!("\n{} {}", 
+                "::".bright_green().bold(), 
+                format!("Successfully upgraded {} Debian package(s)", upgraded_count).bold()
+            );
+        }
+    }
     
     Ok(())
+}
+
+/// Check if a package needs an update by comparing versions
+fn needs_update(installed_version: &str, aur_version: &str) -> Result<bool> {
+    use std::process::Command;
+    
+    let output = Command::new("vercmp")
+        .arg(installed_version)
+        .arg(aur_version)
+        .output()?;
+    
+    if !output.status.success() {
+        return Ok(false);
+    }
+    
+    let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    
+    // vercmp returns:
+    // -1 if installed < aur (update needed)
+    //  0 if installed == aur (no update)
+    //  1 if installed > aur (downgrade, no update)
+    Ok(result == "-1")
 }

@@ -1,5 +1,4 @@
 use crate::error::{KhazaurError, Result};
-
 use std::path::Path;
 use std::process::Command;
 use tracing::info;
@@ -51,5 +50,3 @@ pub fn build_and_install(package_dir: &Path, install: bool) -> Result<()> {
     info!("Package built successfully");
     Ok(())
 }
-
-

@@ -3,6 +3,7 @@ use crate::error::{KhazaurError, Result};
 use crate::pacman;
 use crate::ui;
 use clap::{Parser, Subcommand};
+use colored::Colorize;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -84,6 +85,10 @@ pub struct Args {
     #[arg(long)]
     pub no_timeout: bool,
 
+    /// Generate shell completions for the specified shell
+    #[arg(long = "completions", value_name = "SHELL")]
+    pub completions: Option<String>,
+
     /// Package names or search query
     pub packages: Vec<String>,
 }
@@ -106,11 +111,16 @@ pub enum Command {
 
 impl Args {
     pub async fn execute(&self) -> Result<()> {
+        // Handle --completions flag first (doesn't need config)
+        if let Some(ref shell) = self.completions {
+            return self.generate_completions(shell);
+        }
+
         // Initialize config and ensure directories exist
         let mut config = Config::load()?;
         config.ensure_dirs()?;
 
-        // Handle --set-editor flag first
+        // Handle --set-editor flag
         if let Some(ref editor) = self.set_editor {
             return self.set_default_editor(editor, &mut config);
         }
@@ -203,26 +213,6 @@ impl Args {
             pacman::sync_databases()?;
         }
         
-        // Refresh snap if available and requested
-        if (sync_all || self.snap) && crate::snap::is_available() {
-            println!("\n{}", ui::info("Refreshing snap packages..."));
-            let status = std::process::Command::new("snap")
-                .args(["refresh"])
-                .status();
-            
-            match status {
-                Ok(s) if s.success() => {
-                    println!("{}", ui::success("Snap packages refreshed"));
-                }
-                Ok(_) => {
-                    eprintln!("{}", ui::warning("Snap refresh failed"));
-                }
-                Err(e) => {
-                    eprintln!("{}", ui::warning(&format!("Failed to run snap refresh: {}", e)));
-                }
-            }
-        }
-        
         // Update Debian package index and debtap if requested
         if sync_all || self.debian {
             // Pre-fetch Debian package index (cache warming)
@@ -284,8 +274,12 @@ impl Args {
     async fn system_upgrade(&self, config: &mut Config) -> Result<()> {
         println!("{}", ui::section_header("System Upgrade"));
         
-        // Upgrade pacman packages
-        pacman::upgrade_system(&Vec::new())?;
+        // Sync databases first
+        println!("{}", ui::info("Synchronizing package databases..."));
+        pacman::sync_databases()?;
+        
+        // Check for all updates (repo + AUR) and upgrade together
+        crate::cli::install::upgrade_system(config, self.noconfirm).await?;
         
         // Refresh snap if available
         if crate::snap::is_available() {
@@ -317,10 +311,6 @@ impl Args {
                 eprintln!("{}", ui::warning(&format!("Failed to update Debian index: {}", e)));
             }
         }
-        
-        // TODO: Upgrade AUR packages
-        println!("\n{}", ui::info("Checking for AUR package updates..."));
-        crate::cli::install::upgrade_system(config, self.noconfirm).await?;
         
         // Update debtap database last (takes longer)
         if crate::debtap::is_available() {
@@ -492,10 +482,12 @@ impl Args {
             return Ok(());
         }
         
-        // Remove pacman packages
+        // Remove pacman packages (pass --noconfirm since user already confirmed)
         if !pacman_packages.is_empty() {
-            match pacman::remove_packages(&pacman_packages, &Vec::new()) {
-                Ok(_) => {},
+            match pacman::remove_packages(&pacman_packages, &vec!["--noconfirm".to_string()]) {
+                Ok(_) => {
+                    println!("{}", ui::success("Pacman packages removed successfully"));
+                },
                 Err(e) => {
                     let error_msg = e.to_string();
                     
@@ -514,7 +506,7 @@ impl Args {
                         
                         if force_remove {
                             println!("{}", ui::warning("Force removing packages (ignoring dependencies)..."));
-                            pacman::remove_packages(&pacman_packages, &vec!["-dd".to_string()])?;
+                            pacman::remove_packages(&pacman_packages, &vec!["-dd".to_string(), "--noconfirm".to_string()])?;
                         } else {
                             println!("{}", ui::warning("Removal cancelled"));
                             return Ok(());
@@ -556,11 +548,129 @@ impl Args {
     }
 
     fn query_packages(&self) -> Result<()> {
-        println!("{}", ui::info("Querying installed packages..."));
-        let output = std::process::Command::new("pacman")
-            .arg("-Q")
-            .output()?;
-        print!("{}", String::from_utf8_lossy(&output.stdout));
+        println!("{}", ui::section_header("Installed Packages"));
+        
+        // Get pacman packages (repo + AUR)
+        let pacman_packages = pacman::get_installed_packages()?;
+        let aur_packages = pacman::get_installed_aur_packages()?;
+        
+        // Create a set of AUR package names for quick lookup
+        let aur_names: std::collections::HashSet<String> = aur_packages
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        
+        // Separate repo and AUR packages
+        let mut repo_packages = Vec::new();
+        for (name, version) in &pacman_packages {
+            if !aur_names.contains(name) {
+                repo_packages.push((name.clone(), version.clone()));
+            }
+        }
+        
+        // Get Flatpak packages
+        let flatpak_packages = if crate::flatpak::is_available() {
+            crate::flatpak::get_installed_flatpaks("")?
+        } else {
+            Vec::new()
+        };
+        
+        // Get Snap packages
+        let snap_packages = if crate::snap::is_available() {
+            crate::snap::get_installed_snaps("")?
+        } else {
+            Vec::new()
+        };
+        
+        // Display summary
+        let total = pacman_packages.len() + flatpak_packages.len() + snap_packages.len();
+        println!("\n{} Total: {}, Repository: {}, AUR: {}, Flatpak: {}, Snap: {}\n",
+            "::".bright_blue().bold(),
+            total,
+            repo_packages.len(),
+            aur_packages.len(),
+            flatpak_packages.len(),
+            snap_packages.len()
+        );
+        
+        // Display repository packages
+        if !repo_packages.is_empty() {
+            println!("{} {} ({})", 
+                "::".bright_blue().bold(),
+                "Repository Packages".bold(),
+                repo_packages.len()
+            );
+            for (name, version) in &repo_packages {
+                println!("  {} {}", name, version.dimmed());
+            }
+            println!();
+        }
+        
+        // Display AUR packages
+        if !aur_packages.is_empty() {
+            println!("{} {} ({})", 
+                "::".bright_cyan().bold(),
+                "AUR Packages".bold(),
+                aur_packages.len()
+            );
+            for (name, version) in &aur_packages {
+                println!("  {} {}", name, version.dimmed());
+            }
+            println!();
+        }
+        
+        // Display Flatpak packages
+        if !flatpak_packages.is_empty() {
+            println!("{} {} ({})", 
+                "::".bright_green().bold(),
+                "Flatpak Applications".bold(),
+                flatpak_packages.len()
+            );
+            for app_id in &flatpak_packages {
+                println!("  {}", app_id);
+            }
+            println!();
+        }
+        
+        // Display Snap packages
+        if !snap_packages.is_empty() {
+            println!("{} {} ({})", 
+                "::".bright_yellow().bold(),
+                "Snap Packages".bold(),
+                snap_packages.len()
+            );
+            for name in &snap_packages {
+                println!("  {}", name);
+            }
+            println!();
+        }
+        
+        Ok(())
+    }
+
+    fn generate_completions(&self, shell: &str) -> Result<()> {
+        use clap::CommandFactory;
+        use clap_complete::{generate, Shell};
+        use std::io;
+
+        let shell_type = match shell.to_lowercase().as_str() {
+            "bash" => Shell::Bash,
+            "zsh" => Shell::Zsh,
+            "fish" => Shell::Fish,
+            "powershell" => Shell::PowerShell,
+            "elvish" => Shell::Elvish,
+            _ => {
+                eprintln!("{}", ui::error(&format!("Unsupported shell: {}", shell)));
+                eprintln!("Supported shells: bash, zsh, fish, powershell, elvish");
+                return Ok(());
+            }
+        };
+
+        let mut cmd = Args::command();
+        let bin_name = cmd.get_name().to_string();
+        
+        generate(shell_type, &mut cmd, bin_name, &mut io::stdout());
+        
         Ok(())
     }
 }

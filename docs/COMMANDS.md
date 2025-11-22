@@ -18,9 +18,35 @@ khazaur -S package-name
 # Install multiple packages
 khazaur -S package1 package2 package3
 
+# Install from specific source using prefix (pacman-style)
+khazaur -S aur/yay
+khazaur -S core/linux extra/firefox
+khazaur -S flatpak/org.mozilla.firefox
+khazaur -S snap/discord
+khazaur -S debian/htop
+
+# Install from specific source using flags
+khazaur -S yay --aur
+khazaur -S firefox --flatpak
+
 # Alternative syntax
 khazaur install package-name
 ```
+
+**Source Prefix Syntax:**
+
+Khazaur supports pacman-style source prefixes to explicitly specify where to install from:
+
+- `aur/package` - Install from AUR
+- `repo/package` - Install from official repositories (any repo name: core, extra, multilib, community)
+- `flatpak/app-id` - Install from Flatpak
+- `snap/package` - Install from Snap Store
+- `debian/package` - Install from Debian repositories
+
+This is useful when:
+- A package exists in multiple sources
+- You want to skip the interactive source selection
+- You're scripting installations
 
 ### Sync Database
 
@@ -32,12 +58,29 @@ khazaur -Sy
 ### System Upgrade
 
 ```bash
-# Full system upgrade (repos + AUR)
+# Full system upgrade (repos + AUR + Snap + Debian index)
 khazaur -Syu
 
 # Alternative syntax
 khazaur update
 ```
+
+The system upgrade process:
+1. Synchronizes package databases
+2. Checks for updates in both official repositories and AUR
+3. Shows all available updates in a unified list
+4. Upgrades repository packages first
+5. Rebuilds and installs updated AUR packages
+6. Refreshes Snap packages (if snapd is installed)
+7. Updates Debian package index and debtap database (if debtap is installed)
+
+**Unified Upgrade Features:**
+- Single confirmation for all updates (repo + AUR)
+- Unified display showing all available updates together
+- Repository packages marked by repo name, AUR packages marked with [AUR]
+- Batch querying of AUR for efficiency
+- Optional PKGBUILD review before rebuilding (respects `review_pkgbuild` config)
+- Detailed upgrade information showing old → new versions
 
 ## Search Operations
 
@@ -115,6 +158,29 @@ khazaur -U /path/to/package.pkg.tar.zst
 - `--repo` - Operate on repository packages only
 - `-v, --verbose` - Show debug information and detailed logs
 
+### Shell Completions
+
+Generate shell completion scripts for your shell:
+
+```bash
+# Bash
+khazaur --completions bash > /usr/share/bash-completion/completions/khazaur
+
+# Zsh
+khazaur --completions zsh > /usr/share/zsh/site-functions/_khazaur
+
+# Fish
+khazaur --completions fish > ~/.config/fish/completions/khazaur.fish
+
+# PowerShell
+khazaur --completions powershell > khazaur.ps1
+
+# Elvish
+khazaur --completions elvish > khazaur.elv
+```
+
+After generating completions, restart your shell or source the completion file.
+
 ### Help
 
 ```bash
@@ -142,6 +208,90 @@ Verbose mode shows:
 - Download attempts and retries
 - Dependency resolution steps
 - Build process details
+
+## Unified System Upgrades
+
+Khazaur provides a unified upgrade experience for both repository and AUR packages.
+
+### How It Works
+
+When you run `khazaur -Syu`, the upgrade process:
+
+1. **Syncs databases**: Updates package database information
+2. **Checks repo updates**: Uses `pacman -Qu` to find available repository updates
+3. **Checks AUR updates**: Batch queries the AUR API for current versions of all installed AUR packages
+4. **Compares versions**: Uses `vercmp` to determine which AUR packages have updates available
+5. **Shows all updates**: Displays a unified list of all available updates (repo + AUR)
+6. **Confirms upgrade**: Asks for single confirmation for all updates (unless `--noconfirm` is used)
+7. **Upgrades repos first**: Installs all repository package updates via pacman
+8. **Downloads PKGBUILDs**: Downloads the latest PKGBUILD for each AUR package to be upgraded
+9. **Reviews PKGBUILDs**: Optionally allows you to review PKGBUILDs before building (if `review_pkgbuild` is enabled)
+10. **Rebuilds AUR packages**: Builds and installs each updated AUR package in sequence
+
+### Example Output
+
+```bash
+$ khazaur -Syu
+
+:: System Upgrade
+:: Synchronizing package databases...
+[sync output...]
+
+:: Checking for updates...
+
+:: Packages (5):
+  firefox 120.0-1 -> 121.0-1
+  linux 6.6.1-1 -> 6.6.2-1
+  systemd 255.1-1 -> 255.2-1
+  yay 12.0.5-1 -> 12.1.0-1 [AUR]
+  paru 2.0.0-1 -> 2.0.1-1 [AUR]
+
+:: Repository: 3, AUR: 2
+Proceed with upgrade? [Y/n]: y
+
+:: Upgrading repository packages...
+[pacman output...]
+
+:: Upgrading AUR packages...
+
+:: Downloading PKGBUILDs...
+✓ yay
+✓ paru
+
+:: Building and installing AUR packages...
+:: Building yay...
+[build output...]
+✓ yay upgraded successfully
+
+:: Building paru...
+[build output...]
+✓ paru upgraded successfully
+
+:: Successfully upgraded 2 AUR package(s)
+
+:: System upgrade complete
+```
+
+### Configuration
+
+Control AUR upgrade behavior in `~/.config/khazaur/config.toml`:
+
+```toml
+# Review PKGBUILDs before building during upgrades
+review_pkgbuild = false
+
+# Skip all confirmations (use with caution)
+confirm = true
+```
+
+### Skip Confirmations
+
+```bash
+# Upgrade without any prompts
+khazaur -Syu --noconfirm
+```
+
+**Note**: Using `--noconfirm` will skip PKGBUILD review. Only use this if you trust the packages being upgraded.
 
 ## Examples
 

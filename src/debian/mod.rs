@@ -234,3 +234,54 @@ pub async fn download_debian(package: &DebianPackage) -> Result<PathBuf> {
     println!("✓ Package downloaded and verified: {}", output_path.display());
     Ok(output_path)
 }
+
+/// Check for Debian package updates
+/// Returns list of (package_name, installed_version, debian_version, debian_package)
+pub async fn check_debian_updates() -> Result<Vec<(String, String, String, DebianPackage)>> {
+    // Get all installed packages that might be from Debian
+    let installed = crate::pacman::get_installed_packages()?;
+    
+    // Fetch Debian package index
+    let debian_packages = fetch_and_parse_index().await?;
+    
+    let mut updates = Vec::new();
+    
+    for (pkg_name, installed_version) in installed {
+        // Find matching Debian package
+        if let Some(debian_pkg) = debian_packages.iter().find(|p| p.name == pkg_name) {
+            // Compare versions using vercmp
+            if needs_update(&installed_version, &debian_pkg.version)? {
+                updates.push((
+                    pkg_name,
+                    installed_version,
+                    debian_pkg.version.clone(),
+                    debian_pkg.clone(),
+                ));
+            }
+        }
+    }
+    
+    Ok(updates)
+}
+
+/// Check if a package needs an update by comparing versions
+fn needs_update(installed_version: &str, available_version: &str) -> Result<bool> {
+    use std::process::Command;
+    
+    let output = Command::new("vercmp")
+        .arg(installed_version)
+        .arg(available_version)
+        .output()?;
+    
+    if !output.status.success() {
+        return Ok(false);
+    }
+    
+    let result = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    
+    // vercmp returns:
+    // -1 if installed < available (update needed)
+    //  0 if installed == available (no update)
+    //  1 if installed > available (downgrade, no update)
+    Ok(result == "-1")
+}
