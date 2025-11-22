@@ -49,13 +49,6 @@ Written in Rust for performance and reliability.
 
 ## Installation
 
-### Using PKGBUILD (Recommended)
-
-```bash
-git clone https://github.com/os-guy-original/khazaur.git
-cd khazaur/build
-makepkg -si
-```
 
 ### Manual Build
 

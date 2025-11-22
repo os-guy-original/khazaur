@@ -37,6 +37,3 @@ src/pkg/
 _site/
 *.bak
 
-# Build directory
-build/*
-!build/PKGBUILD

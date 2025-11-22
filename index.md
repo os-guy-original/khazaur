@@ -85,14 +85,6 @@ layout: default
   <h2>Installation</h2>
   
   <div class="install-steps">
-    <div class="step">
-      <h3>Using PKGBUILD (Recommended)</h3>
-      <div class="code-block">
-        <code>git clone https://github.com/os-guy-original/khazaur.git
-cd khazaur/build
-makepkg -si</code>
-      </div>
-    </div>
 
     <div class="step">
       <h3>Manual build</h3>
