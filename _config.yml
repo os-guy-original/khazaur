@@ -1,7 +1,7 @@
 title: Khazaur
 description: One Package Manager to Rule Them All - Multi-source package management for Arch Linux
-url: "https://os-guy-original.github.io/khazaur"
-baseurl: ""
+url: "https://os-guy-original.github.io"
+baseurl: "/khazaur"
 
 # Logo
 logo: /res/logo/khazaur.svg
