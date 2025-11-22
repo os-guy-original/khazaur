@@ -1,3 +1,8 @@
+---
+layout: default
+title: Commands Reference
+---
+
 # Khazaur Commands Reference
 
 Complete command reference for khazaur, the modern AUR helper.

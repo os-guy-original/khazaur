@@ -49,6 +49,24 @@ Written in Rust for performance and reliability.
 
 ## Installation
 
+### Using PKGBUILD (Recommended)
+
+```bash
+git clone https://github.com/os-guy-original/khazaur.git
+cd khazaur
+makepkg -si
+```
+
+### From Git (Development Version)
+
+```bash
+git clone https://github.com/os-guy-original/khazaur.git
+cd khazaur
+makepkg -si -p PKGBUILD-git
+```
+
+### Manual Build
+
 Requirements:
 - Arch Linux or Arch-based distribution
 - Rust 1.70+
@@ -59,10 +77,12 @@ Requirements:
 git clone https://github.com/os-guy-original/khazaur.git
 cd khazaur
 cargo build --release
-sudo cp target/release/khazaur /usr/local/bin/
+sudo install -Dm755 target/release/khazaur /usr/bin/khazaur
 ```
 
-Optional dependencies (khazaur will prompt when needed):
+### Optional Dependencies
+
+Khazaur will prompt to install these when needed:
 - `flatpak` - for Flatpak support
 - `snapd` - for Snap support
 - `debtap` - for Debian package conversion

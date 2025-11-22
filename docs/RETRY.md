@@ -1,3 +1,8 @@
+---
+layout: default
+title: Retry Mechanism
+---
+
 # Khazaur Retry Mechanism
 
 ## Overview

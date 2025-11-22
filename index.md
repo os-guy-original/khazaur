@@ -269,15 +269,15 @@ khazaur -Sy --debian</code>
     </div>
 
     <div class="doc-card">
-      <h3>Retry Logic</h3>
-      <p>How khazaur handles rate limits and network errors.</p>
-      <a href="docs/RETRY.html" class="doc-link">Read →</a>
+      <h3>Configuration</h3>
+      <p>Customize khazaur's behavior and settings.</p>
+      <a href="docs/CONFIGURATION.html" class="doc-link">Read →</a>
     </div>
 
     <div class="doc-card">
-      <h3>Configuration</h3>
-      <p>Customize khazaur's behavior and settings.</p>
-      <a href="#config" class="doc-link">Read →</a>
+      <h3>Retry Logic</h3>
+      <p>How khazaur handles rate limits and network errors.</p>
+      <a href="docs/RETRY.html" class="doc-link">Read →</a>
     </div>
   </div>
 </section>

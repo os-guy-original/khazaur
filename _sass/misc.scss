@@ -1,0 +1,183 @@
+/* Miscellaneous Components */
+
+/* Installation Steps */
+.install-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.step {
+  background: var(--md-sys-color-surface-variant);
+  border-left: 4px solid var(--md-sys-color-primary);
+  border-radius: 16px;
+  padding: 1.5rem;
+}
+
+.step h3 {
+  color: var(--md-sys-color-primary);
+  margin-bottom: 1rem;
+  font-size: 1.375rem;
+  font-weight: 500;
+}
+
+.step ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.step ul li {
+  padding: 0.5rem 0;
+  padding-left: 1.5rem;
+  position: relative;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.step ul li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--md-sys-color-primary);
+  font-weight: bold;
+}
+
+/* Code Blocks */
+.code-block {
+  background: var(--md-sys-color-surface-variant);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  overflow-x: auto;
+}
+
+.code-block code {
+  color: var(--md-sys-color-primary);
+  font-family: 'Roboto Mono', 'Fira Code', monospace;
+  font-size: 0.875rem;
+  white-space: pre;
+}
+
+/* Usage Examples */
+.usage-examples {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1.5rem;
+}
+
+.example {
+  background: var(--md-sys-color-surface-variant);
+  border-radius: 16px;
+  padding: 1.5rem;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.example:hover {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
+}
+
+.example h3 {
+  color: var(--md-sys-color-primary);
+  margin-bottom: 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 500;
+}
+
+.example-note {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+  opacity: 0.8;
+}
+
+/* Comparison Table */
+.comparison-table {
+  overflow-x: auto;
+  margin: 2rem 0;
+  border-radius: 16px;
+}
+
+.comparison-table table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--md-sys-color-surface-variant);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.comparison-table th,
+.comparison-table td {
+  padding: 1rem;
+  text-align: left;
+}
+
+.comparison-table th {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  font-weight: 500;
+  font-size: 0.875rem;
+  letter-spacing: 0.1px;
+}
+
+.comparison-table tr {
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.comparison-table tr:last-child {
+  border-bottom: none;
+}
+
+.comparison-table td:first-child {
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.comparison p {
+  text-align: center;
+  margin-top: 2rem;
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.8;
+}
+
+/* Footer CTA */
+.footer-cta {
+  text-align: center;
+  padding: 4rem 2rem;
+  background: var(--md-sys-color-surface-variant);
+  border-radius: 28px;
+  margin: 4rem auto;
+  max-width: 800px;
+}
+
+.footer-cta h2 {
+  margin-bottom: 1rem;
+  font-weight: 400;
+}
+
+.footer-cta p {
+  color: var(--md-sys-color-on-surface-variant);
+  margin-bottom: 2rem;
+  opacity: 0.9;
+}
+
+.footer-note {
+  margin-top: 2rem;
+  font-size: 0.875rem;
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.8;
+}
+
+.footer-note a {
+  color: var(--md-sys-color-primary);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.footer-note a:hover {
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+  .usage-examples {
+    grid-template-columns: 1fr;
+  }
+}

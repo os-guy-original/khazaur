@@ -1,0 +1,144 @@
+/* Documentation Pages */
+
+main > h1:first-child,
+main > h2:first-child,
+main > h3:first-child {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 2rem 2rem 0;
+}
+
+main > p,
+main > ul,
+main > ol,
+main > blockquote,
+main > table,
+main > h1:not(:first-child),
+main > h2:not(:first-child),
+main > h3:not(:first-child),
+main > h4 {
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+
+main > pre {
+  max-width: 750px;
+  margin-left: auto;
+  margin-right: auto;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+main h1 {
+  font-size: 2.5rem;
+  font-weight: 400;
+  color: var(--md-sys-color-on-background);
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--md-sys-color-outline);
+}
+
+main h2 {
+  font-size: 2rem;
+  font-weight: 400;
+  color: var(--md-sys-color-on-background);
+  margin-top: 3rem;
+  margin-bottom: 1.5rem;
+}
+
+main h3 {
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--md-sys-color-primary);
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+}
+
+main h4 {
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--md-sys-color-on-background);
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+main p {
+  margin-bottom: 1rem;
+  line-height: 1.7;
+  color: var(--md-sys-color-on-background);
+}
+
+main ul, main ol {
+  margin-bottom: 1rem;
+  padding-left: 2rem;
+  color: var(--md-sys-color-on-background);
+}
+
+main li {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+main code {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-family: 'Roboto Mono', 'Fira Code', monospace;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+main pre {
+  background: var(--md-sys-color-secondary-container);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin: 1.5rem auto;
+  overflow-x: auto;
+  border-left: 4px solid var(--md-sys-color-secondary);
+  max-width: 750px;
+}
+
+main pre code {
+  background: transparent;
+  padding: 0;
+  color: var(--md-sys-color-on-secondary-container);
+  font-weight: 500;
+}
+
+main table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+  background: var(--md-sys-color-surface-variant);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+main th {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+  padding: 1rem;
+  text-align: left;
+  font-weight: 500;
+}
+
+main td {
+  padding: 1rem;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+main a {
+  color: var(--md-sys-color-primary);
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+main a:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
