@@ -19,12 +19,12 @@ sha256sums=('SKIP')
 
 build() {
     cd "$pkgname-$pkgver"
-    cargo build --release --locked
+    cargo build --release
 }
 
 check() {
     cd "$pkgname-$pkgver"
-    cargo test --release --locked
+    cargo test --release
 }
 
 package() {
