@@ -6,11 +6,6 @@ baseurl: ""
 # Logo
 logo: /res/logo/khazaur.svg
 
-# Theme
-remote_theme: pages-themes/minimal@v0.2.0
-plugins:
-  - jekyll-remote-theme
-
 # Navigation
 nav_links:
   - title: Home

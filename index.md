@@ -20,73 +20,61 @@ layout: default
   
   <div class="feature-grid">
     <div class="feature-card">
-      <div class="feature-icon">📦</div>
       <h3>Multi-source support</h3>
       <p>Install from official repos, AUR, Flatpak, Snap, and Debian packages using a single command interface.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">🚀</div>
       <h3>Unified search</h3>
       <p>Search across all package sources simultaneously. Results show which source each package comes from.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">⚡</div>
       <h3>Intelligent caching</h3>
       <p>Debian packages are cached for 24 hours with MD5 verification to reduce bandwidth usage.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">✅</div>
       <h3>Interactive selection</h3>
       <p>When multiple sources have the same package, choose which one to install through an interactive menu.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">🔐</div>
       <h3>Security features</h3>
       <p>Review PKGBUILDs before building, verify checksums, and use pkexec/sudo/doas for privilege escalation.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">🎯</div>
       <h3>Clear output</h3>
       <p>Progress indicators, color-coded messages, and organized output make operations easy to follow.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">🛠️</div>
       <h3>Debian package support</h3>
       <p>Install .deb files directly with automatic conversion using debtap.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">🧹</div>
       <h3>Optional dependency handling</h3>
       <p>Prompts to install flatpak, snapd, or debtap when you first try to use them.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">⚙️</div>
       <h3>Automatic setup</h3>
       <p>Enables systemd services for snapd and creates necessary symlinks automatically.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">🔄</div>
       <h3>Dependency resolution</h3>
       <p>Automatically resolves dependencies and determines the correct build order for AUR packages.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">🎨</div>
       <h3>Source filtering</h3>
       <p>Use --aur, --repo, --flatpak, --snap, or --debian to target specific package sources.</p>
     </div>
 
     <div class="feature-card">
-      <div class="feature-icon">⚡</div>
       <h3>Built with Rust</h3>
       <p>Memory-safe and fast. Compiled binary with no runtime dependencies.</p>
     </div>
@@ -275,19 +263,19 @@ khazaur -Sy --debian</code>
   
   <div class="docs-grid">
     <div class="doc-card">
-      <h3>📚 Commands</h3>
+      <h3>Commands</h3>
       <p>Complete command reference and usage examples.</p>
       <a href="docs/COMMANDS.html" class="doc-link">Read →</a>
     </div>
 
     <div class="doc-card">
-      <h3>🔄 Retry Logic</h3>
+      <h3>Retry Logic</h3>
       <p>How khazaur handles rate limits and network errors.</p>
       <a href="docs/RETRY.html" class="doc-link">Read →</a>
     </div>
 
     <div class="doc-card">
-      <h3>⚙️ Configuration</h3>
+      <h3>Configuration</h3>
       <p>Customize khazaur's behavior and settings.</p>
       <a href="#config" class="doc-link">Read →</a>
     </div>

@@ -9,10 +9,15 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
   
   <!-- Styles -->
   <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+  
+  <!-- Debug: Check if CSS is loading -->
+  <script>
+    console.log('CSS path:', '{{ "/assets/css/style.css" | relative_url }}');
+  </script>
   
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="{{ 'res/logo/khazaur.svg' | relative_url }}">
