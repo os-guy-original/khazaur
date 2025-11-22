@@ -7,7 +7,7 @@ arch=('x86_64')
 url="https://github.com/os-guy-original/khazaur"
 license=('GPL3')
 depends=('pacman' 'sudo')
-makedepends=('rust' 'cargo' 'libgit2' 'openssl' 'zlib')
+makedepends=('rust' 'cargo' 'libgit2' 'libssh2' 'openssl' 'zlib' 'cmake' 'pkgconf')
 optdepends=(
     'flatpak: for Flatpak application support'
     'snapd: for Snap package support'
@@ -19,12 +19,14 @@ sha256sums=('SKIP')
 
 build() {
     cd "$pkgname-$pkgver"
-    cargo build --release
+    export LIBGIT2_SYS_USE_PKG_CONFIG=1
+    export LIBSSH2_SYS_USE_PKG_CONFIG=1
+    cargo build --release --locked
 }
 
 check() {
     cd "$pkgname-$pkgver"
-    cargo test --release
+    cargo test --release --locked
 }
 
 package() {
