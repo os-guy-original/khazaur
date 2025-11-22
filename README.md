@@ -69,8 +69,6 @@ Requirements:
 ```bash
 git clone https://github.com/os-guy-original/khazaur.git
 cd khazaur
-export LIBGIT2_SYS_USE_PKG_CONFIG=1
-export LIBSSH2_SYS_USE_PKG_CONFIG=1
 cargo build --release
 sudo install -Dm755 target/release/khazaur /usr/bin/khazaur
 ```

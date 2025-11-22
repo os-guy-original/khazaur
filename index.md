@@ -89,7 +89,7 @@ layout: default
       <h3>Using PKGBUILD (Recommended)</h3>
       <div class="code-block">
         <code>git clone https://github.com/os-guy-original/khazaur.git
-cd khazaur
+cd khazaur/build
 makepkg -si</code>
       </div>
     </div>
@@ -99,8 +99,6 @@ makepkg -si</code>
       <div class="code-block">
         <code>git clone https://github.com/os-guy-original/khazaur.git
 cd khazaur
-export LIBGIT2_SYS_USE_PKG_CONFIG=1
-export LIBSSH2_SYS_USE_PKG_CONFIG=1
 cargo build --release
 sudo install -Dm755 target/release/khazaur /usr/bin/khazaur</code>
       </div>
