@@ -1,0 +1,70 @@
+[package]
+name = "khazaur"
+version = "0.1.0"
+edition = "2021"
+authors = ["os-guy-original"]
+description = "Unified package manager for Arch Linux - AUR, repos, Flatpak, Snap, and Debian packages"
+license = "GPL-3.0"
+repository = "https://github.com/os-guy-original/khazaur"
+readme = "README.md"
+keywords = ["aur", "arch", "pacman", "package-manager", "flatpak"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+# CLI argument parsing
+clap = { version = "4.5", features = ["derive", "cargo", "wrap_help"] }
+
+# Async runtime and HTTP client
+tokio = { version = "1.40", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "blocking", "stream"] }
+futures-util = "0.3"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Parsing
+regex = "1.10"
+
+# Terminal UI and colors
+colored = "2.1"
+indicatif = "0.17"
+dialoguer = "0.11"
+console = "0.15"
+skim = "0.10"  # Interactive fuzzy finder
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# System utilities
+dirs = "5.0"
+tempfile = "3.12"
+
+# Archive handling
+tar = "0.4"
+flate2 = "1.0"
+
+# Process execution
+which = "6.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Git operations
+git2 = "0.19"
+
+# Checksums
+md5 = "0.7"
+
+[dev-dependencies]
+mockito = "1.5"
+tokio-test = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

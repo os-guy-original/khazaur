@@ -1,0 +1,36 @@
+title: Khazaur
+description: One Package Manager to Rule Them All - Multi-source package management for Arch Linux
+url: "https://os-guy-original.github.io/khazaur"
+baseurl: ""
+
+# Logo
+logo: /res/logo/khazaur.svg
+
+# Theme
+remote_theme: pages-themes/minimal@v0.2.0
+plugins:
+  - jekyll-remote-theme
+
+# Navigation
+nav_links:
+  - title: Home
+    url: /
+  - title: Features
+    url: /#features
+  - title: Install
+    url: /#install
+  - title: Comparison
+    url: /#comparison
+  - title: Documentation
+    url: /#docs
+
+# Social
+github_username: os-guy-original
+repository: os-guy-original/khazaur
+
+# Build settings
+markdown: kramdown
+
+# SEO
+tagline: Multi-source package management for Arch Linux
+keywords: arch linux, aur, package manager, flatpak, snap, debian, rust
