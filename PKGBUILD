@@ -7,7 +7,7 @@ arch=('x86_64')
 url="https://github.com/os-guy-original/khazaur"
 license=('GPL3')
 depends=('pacman' 'sudo')
-makedepends=('rust' 'cargo')
+makedepends=('rust' 'cargo' 'libgit2' 'openssl' 'zlib')
 optdepends=(
     'flatpak: for Flatpak application support'
     'snapd: for Snap package support'
