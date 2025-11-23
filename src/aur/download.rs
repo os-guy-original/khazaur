@@ -33,8 +33,39 @@ async fn try_git_download(package_name: &str, pkg_dir: &PathBuf) -> Result<PathB
     let url = format!("https://aur.archlinux.org/{}.git", package_name);
     
     if pkg_dir.exists() {
-        // Update existing clone
-        std::fs::remove_dir_all(pkg_dir)?;
+        // Check if there are built packages (.pkg.tar.* files)
+        let has_built_packages = std::fs::read_dir(pkg_dir)
+            .ok()
+            .and_then(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .find(|e| {
+                        e.file_name()
+                            .to_string_lossy()
+                            .ends_with(".pkg.tar.zst") ||
+                        e.file_name()
+                            .to_string_lossy()
+                            .ends_with(".pkg.tar.xz")
+                    })
+            })
+            .is_some();
+        
+        if has_built_packages {
+            warn!("Package directory contains built packages, keeping existing directory");
+            return Ok(pkg_dir.clone());
+        }
+        
+        // Try to remove existing directory
+        if let Err(e) = std::fs::remove_dir_all(pkg_dir) {
+            return Err(KhazaurError::DownloadFailed(
+                format!(
+                    "Cannot remove existing directory: {}\n\
+                     This may be due to permission issues (files owned by root).\n\
+                     Try: sudo rm -rf {:?}",
+                    e, pkg_dir
+                )
+            ));
+        }
     }
     
     // Clone repository
@@ -53,7 +84,39 @@ async fn download_tarball(
     let pkg_dir = config.clone_dir.join(package_name);
     
     if pkg_dir.exists() {
-        std::fs::remove_dir_all(&pkg_dir)?;
+        // Check if there are built packages (.pkg.tar.* files)
+        let has_built_packages = std::fs::read_dir(&pkg_dir)
+            .ok()
+            .and_then(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .find(|e| {
+                        e.file_name()
+                            .to_string_lossy()
+                            .ends_with(".pkg.tar.zst") ||
+                        e.file_name()
+                            .to_string_lossy()
+                            .ends_with(".pkg.tar.xz")
+                    })
+            })
+            .is_some();
+        
+        if has_built_packages {
+            warn!("Package directory contains built packages, keeping existing directory");
+            return Ok(pkg_dir);
+        }
+        
+        // Try to remove existing directory
+        if let Err(e) = std::fs::remove_dir_all(&pkg_dir) {
+            return Err(KhazaurError::DownloadFailed(
+                format!(
+                    "Cannot remove existing directory: {}\n\
+                     This may be due to permission issues (files owned by root).\n\
+                     Try: sudo rm -rf {:?}",
+                    e, pkg_dir
+                )
+            ));
+        }
     }
     
     let decoder = GzDecoder::new(&bytes[..]);

@@ -215,9 +215,8 @@ impl Args {
         
         // Update Debian package index and debtap if requested
         if sync_all || self.debian {
-            // Pre-fetch Debian package index (cache warming)
-            println!("\n{}", ui::info("Updating Debian package index..."));
-            match crate::debian::search_debian("").await {
+            // Update Debian package index with progress bar
+            match crate::debian::update_index().await {
                 Ok(_) => {
                     println!("{}", ui::success("Debian index updated"));
                 }
@@ -301,9 +300,8 @@ impl Args {
             }
         }
         
-        // Pre-fetch Debian package index (cache warming)
-        println!("\n{}", ui::info("Updating Debian package index..."));
-        match crate::debian::search_debian("").await {
+        // Update Debian package index with progress bar
+        match crate::debian::update_index().await {
             Ok(_) => {
                 println!("{}", ui::success("Debian index updated"));
             }

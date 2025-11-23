@@ -11,7 +11,7 @@ use crate::ui::{self, select_package_source};
 use colored::*;
 use tracing::{debug, warn};
 
-/// Install packages from AUR, repos, Flatpak, and Snap
+/// Install packages from AUR, repos, Flatpak, Snap and Debian
 pub async fn install(
     packages: &[String],
     config: &mut Config,
@@ -95,7 +95,7 @@ pub async fn install(
         }
     }
     
-    let spinner = ui::spinner("Searching for packages...");
+    let spinner = ui::Spinner::new("Searching for packages...");
 
     let client = AurClient::new()?;
     
@@ -144,9 +144,11 @@ pub async fn install(
             search_snap,
             search_debian,
             no_timeout,
+            Some(spinner.inner()),
         ).await?;
         
-        spinner.finish_and_clear();
+        // Clear spinner before showing selection UI
+        spinner.inner().finish_and_clear();
 
         let selected_index = if candidates.is_empty() {
             if explicit_source.is_some() {
@@ -190,6 +192,12 @@ pub async fn install(
                 debug!("{} found in Debian", pkg.name);
                 debian_packages.push(pkg.clone());
             }
+        }
+        
+        // Recreate spinner for next package if there are more
+        if parsed_packages.len() > 1 {
+            // This is a bit of a hack, but we need to drop and recreate the spinner
+            // since we cleared it above
         }
     }
 

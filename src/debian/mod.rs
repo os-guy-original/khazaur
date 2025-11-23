@@ -24,7 +24,7 @@ fn get_system_arch() -> String {
 }
 
 /// Fetch and parse the Packages.gz index
-async fn fetch_and_parse_index() -> Result<Vec<DebianPackage>> {
+async fn fetch_and_parse_index(show_progress: bool) -> Result<Vec<DebianPackage>> {
     let arch = get_system_arch();
     let arch_mapped = match arch.as_str() {
         "x86_64" => "amd64",
@@ -66,9 +66,6 @@ async fn fetch_and_parse_index() -> Result<Vec<DebianPackage>> {
             DEBIAN_MIRROR, RELEASE, COMPONENT, arch_mapped
         );
         
-        // Download with progress bar
-        use indicatif::{ProgressBar, ProgressStyle};
-        
         let response = reqwest::get(&index_url).await
             .map_err(|e| KhazaurError::Config(format!("Failed to fetch Debian index: {}", e)))?;
         
@@ -79,26 +76,38 @@ async fn fetch_and_parse_index() -> Result<Vec<DebianPackage>> {
             )));
         }
         
-        let total_size = response.content_length().unwrap_or(0);
-        let pb = ProgressBar::new(total_size);
-        pb.set_style(ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-            .unwrap()
-            .progress_chars("#>-"));
-        
-        let mut downloaded: u64 = 0;
-        let mut bytes_vec = Vec::new();
-        let mut stream = response.bytes_stream();
-        
-        use futures_util::StreamExt;
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| KhazaurError::Config(format!("Download error: {}", e)))?;
-            bytes_vec.extend_from_slice(&chunk);
-            downloaded += chunk.len() as u64;
-            pb.set_position(downloaded);
-        }
-        
-        pb.finish_with_message("Download complete");
+        let bytes_vec = if show_progress {
+            // Download with progress bar
+            use indicatif::{ProgressBar, ProgressStyle};
+            use futures_util::StreamExt;
+            
+            // Show message before starting download
+            eprintln!("Updating Debian package index...");
+            
+            let total_size = response.content_length().unwrap_or(0);
+            let pb = ProgressBar::new(total_size);
+            pb.set_style(ProgressStyle::default_bar()
+                .template("  [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                .unwrap()
+                .progress_chars("#>-"));
+            
+            let mut downloaded: u64 = 0;
+            let mut bytes_vec = Vec::new();
+            let mut stream = response.bytes_stream();
+            
+            while let Some(chunk) = stream.next().await {
+                let chunk = chunk.map_err(|e| KhazaurError::Config(format!("Download error: {}", e)))?;
+                bytes_vec.extend_from_slice(&chunk);
+                downloaded += chunk.len() as u64;
+                pb.set_position(downloaded);
+            }
+            
+            pb.finish_and_clear();
+            bytes_vec
+        } else {
+            // Download silently without any output
+            response.bytes().await?.to_vec()
+        };
         
         // Write to cache
         std::fs::write(&cache_file, &bytes_vec)?;
@@ -171,9 +180,47 @@ async fn fetch_and_parse_index() -> Result<Vec<DebianPackage>> {
     Ok(packages)
 }
 
+/// Update Debian package index (with progress bar)
+pub async fn update_index() -> Result<()> {
+    fetch_and_parse_index(true).await?;
+    Ok(())
+}
+
+/// Check if Debian index needs updating
+pub fn index_needs_update() -> bool {
+    let cache_dir = match dirs::cache_dir() {
+        Some(dir) => dir.join("khazaur").join("debian"),
+        None => return true,
+    };
+    
+    let arch = get_system_arch();
+    let arch_mapped = match arch.as_str() {
+        "x86_64" => "amd64",
+        "aarch64" => "arm64",
+        _ => &arch,
+    };
+    
+    let cache_file = cache_dir.join(format!("Packages-{}-{}.gz", RELEASE, arch_mapped));
+    
+    if !cache_file.exists() {
+        return true;
+    }
+    
+    // Check if cache is older than 24 hours
+    if let Ok(metadata) = std::fs::metadata(&cache_file) {
+        if let Ok(modified) = metadata.modified() {
+            if let Ok(elapsed) = modified.elapsed() {
+                return elapsed.as_secs() > 86400;
+            }
+        }
+    }
+    
+    false
+}
+
 /// Search for Debian packages matching a query
 pub async fn search_debian(query: &str) -> Result<Vec<DebianPackage>> {
-    let all_packages = fetch_and_parse_index().await?;
+    let all_packages = fetch_and_parse_index(false).await?;
     let query_lower = query.to_lowercase();
     
     let matches: Vec<DebianPackage> = all_packages
@@ -242,7 +289,7 @@ pub async fn check_debian_updates() -> Result<Vec<(String, String, String, Debia
     let installed = crate::pacman::get_installed_packages()?;
     
     // Fetch Debian package index
-    let debian_packages = fetch_and_parse_index().await?;
+    let debian_packages = fetch_and_parse_index(true).await?;
     
     let mut updates = Vec::new();
     

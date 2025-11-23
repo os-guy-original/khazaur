@@ -138,8 +138,10 @@ pub async fn search(
     // Search Debian (only if debtap is available)
     if (search_all || debian_filter) && crate::debtap::is_available() {
         info!("Searching Debian...");
+        let spinner = ui::spinner("Searching Debian...");
         match crate::debian::search_debian(query).await {
             Ok(packages) => {
+                spinner.finish_and_clear();
                 if !packages.is_empty() {
                     println!("\n{}", ui::info(&format!("Debian Packages ({})", packages.len())));
                     for pkg in packages {
@@ -149,6 +151,7 @@ pub async fn search(
                 }
             }
             Err(e) => {
+                spinner.finish_and_clear();
                 tracing::error!("Error searching Debian: {}", e);
             }
         }
