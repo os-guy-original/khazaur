@@ -219,3 +219,76 @@ pub fn uninstall_flatpak(app_id: &str) -> Result<()> {
     
     Ok(())
 }
+
+/// Get list of Flatpak packages with available updates
+/// Returns Vec of (display_name, current_version, new_version)
+pub fn get_updates() -> Result<Vec<(String, String, String)>> {
+    if !is_available() {
+        return Ok(Vec::new());
+    }
+    
+    // Get installed versions with name and app_id
+    let installed_output = Command::new("flatpak")
+        .args(&["list", "--app", "--columns=name,application,version"])
+        .output()?;
+    
+    let mut installed_info = std::collections::HashMap::new();
+    if installed_output.status.success() {
+        let installed_stdout = String::from_utf8_lossy(&installed_output.stdout);
+        for line in installed_stdout.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() >= 3 {
+                let name = parts[0].trim().to_string();
+                let app_id = parts[1].trim().to_string();
+                let version = parts[2].trim().to_string();
+                installed_info.insert(app_id.clone(), (name, version));
+            }
+        }
+    }
+    
+    // Get list of updates
+    let output = Command::new("flatpak")
+        .args(&["remote-ls", "--updates", "--columns=application,version"])
+        .output()?;
+    
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut updates = Vec::new();
+    
+    // Parse updates list
+    for line in stdout.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 2 {
+            let app_id = parts[0].trim().to_string();
+            let new_version = parts[1].trim().to_string();
+            
+            // Get name and current version from installed list
+            if let Some((name, current_version)) = installed_info.get(&app_id) {
+                let display_name = format!("{} ({})", name, app_id);
+                updates.push((display_name, current_version.clone(), new_version));
+            }
+        }
+    }
+    
+    Ok(updates)
+}
+
+/// Update all Flatpak packages
+pub fn update_all() -> Result<()> {
+    if !is_available() {
+        return Err(KhazaurError::Config("Flatpak is not installed".to_string()));
+    }
+    
+    let status = Command::new("flatpak")
+        .args(&["update", "-y"])
+        .status()?;
+    
+    if !status.success() {
+        return Err(KhazaurError::Config("Flatpak update failed".to_string()));
+    }
+    
+    Ok(())
+}

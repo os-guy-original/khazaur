@@ -1,8 +1,9 @@
 use crate::error::{KhazaurError, Result};
 use flate2::read::GzDecoder;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DebianPackage {
@@ -282,9 +283,55 @@ pub async fn download_debian(package: &DebianPackage) -> Result<PathBuf> {
     Ok(output_path)
 }
 
+/// Get the path to the Debian tracking file
+fn get_tracking_file() -> Result<PathBuf> {
+    let config_dir = dirs::config_dir()
+        .ok_or_else(|| KhazaurError::Config("Could not find config directory".to_string()))?
+        .join("khazaur");
+    
+    std::fs::create_dir_all(&config_dir)?;
+    Ok(config_dir.join("debian_packages.txt"))
+}
+
+/// Track a package as installed from Debian
+pub fn track_debian_package(package_name: &str) -> Result<()> {
+    let tracking_file = get_tracking_file()?;
+    let mut packages = load_tracked_packages()?;
+    packages.insert(package_name.to_string());
+    
+    let mut file = std::fs::File::create(tracking_file)?;
+    for pkg in packages {
+        writeln!(file, "{}", pkg)?;
+    }
+    Ok(())
+}
+
+/// Load tracked Debian packages
+fn load_tracked_packages() -> Result<HashSet<String>> {
+    let tracking_file = get_tracking_file()?;
+    
+    if !tracking_file.exists() {
+        return Ok(HashSet::new());
+    }
+    
+    let content = std::fs::read_to_string(tracking_file)?;
+    Ok(content.lines().map(|s| s.to_string()).collect())
+}
+
+/// Check if a package was installed from Debian
+#[allow(dead_code)]
+pub fn is_debian_package(package_name: &str) -> bool {
+    load_tracked_packages()
+        .map(|packages| packages.contains(package_name))
+        .unwrap_or(false)
+}
+
 /// Check for Debian package updates
 /// Returns list of (package_name, installed_version, debian_version, debian_package)
 pub async fn check_debian_updates() -> Result<Vec<(String, String, String, DebianPackage)>> {
+    // Get tracked Debian packages
+    let tracked_packages = load_tracked_packages()?;
+    
     // Get all installed packages that might be from Debian
     let installed = crate::pacman::get_installed_packages()?;
     
@@ -294,6 +341,11 @@ pub async fn check_debian_updates() -> Result<Vec<(String, String, String, Debia
     let mut updates = Vec::new();
     
     for (pkg_name, installed_version) in installed {
+        // Only check packages that were tracked as Debian packages
+        if !tracked_packages.contains(&pkg_name) {
+            continue;
+        }
+        
         // Find matching Debian package
         if let Some(debian_pkg) = debian_packages.iter().find(|p| p.name == pkg_name) {
             // Compare versions using vercmp

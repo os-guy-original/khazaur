@@ -5,7 +5,7 @@ use crate::debian::DebianPackage;
 use colored::Colorize;
 
 /// Represents a package found in a specific source
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PackageCandidate {
     #[allow(dead_code)]
     pub name: String,
@@ -13,7 +13,7 @@ pub struct PackageCandidate {
 }
 
 /// Different sources where a package can be found
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum PackageSource {
     /// Official repository
     Repo(crate::pacman::RepoPackage),

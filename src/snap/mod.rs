@@ -183,3 +183,59 @@ pub fn uninstall_snap(package_name: &str) -> Result<()> {
     
     Ok(())
 }
+
+/// Get list of Snap packages with available updates
+/// Returns Vec of (name, current_version, new_version)
+pub fn get_updates() -> Result<Vec<(String, String, String)>> {
+    if !is_available() {
+        return Ok(Vec::new());
+    }
+    
+    // Get list of updates
+    let output = Command::new("snap")
+        .args(&["refresh", "--list"])
+        .output()?;
+    
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut updates = Vec::new();
+    
+    for line in stdout.lines() {
+        // Skip header and empty lines
+        if line.is_empty() || line.starts_with("Name") || line.starts_with("All snaps") {
+            continue;
+        }
+        
+        // Snap output format: Name  Version  Rev  Publisher  Notes
+        // We need columns: Name (0), Current Version (1), New Version (2)
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 3 {
+            let name = parts[0].to_string();
+            let current = parts[1].to_string();
+            let new_ver = parts[2].to_string();
+            updates.push((name, current, new_ver));
+        }
+    }
+    
+    Ok(updates)
+}
+
+/// Update all Snap packages
+pub fn update_all() -> Result<()> {
+    if !is_available() {
+        return Err(KhazaurError::Config("Snap is not installed".to_string()));
+    }
+    
+    let status = Command::new("snap")
+        .args(&["refresh"])
+        .status()?;
+    
+    if !status.success() {
+        return Err(KhazaurError::Config("Snap update failed".to_string()));
+    }
+    
+    Ok(())
+}

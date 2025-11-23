@@ -42,7 +42,7 @@ pub fn get_repo_info(package_name: &str) -> Result<Option<String>> {
 }
 
 /// Simple package information from repo search
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RepoPackage {
     pub repository: String,
     pub name: String,

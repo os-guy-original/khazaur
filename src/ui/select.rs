@@ -38,7 +38,7 @@ pub fn select_package_source(package_name: &str, candidates: &[PackageCandidate]
         .collect();
         
     let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Select package source")
+        .with_prompt(format!("Select package source for '{}'", package_name))
         .items(&items)
         .default(0)
         .interact_opt()?;

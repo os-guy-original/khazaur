@@ -57,8 +57,21 @@ pub async fn install(
         }
         
         if crate::debtap::is_available() {
-            if let Err(e) = crate::debtap::install_deb(&deb_file).await {
-                eprintln!("{}", ui::error(&format!("Failed to install .deb package {}: {}", deb_file, e)));
+            match crate::debtap::install_deb(&deb_file).await {
+                Ok(_) => {
+                    // Try to extract package name from .deb file and track it
+                    // This is best-effort, may not always work
+                    if let Some(pkg_name) = std::path::Path::new(&deb_file)
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .and_then(|s| s.split('_').next())
+                    {
+                        let _ = crate::debian::track_debian_package(pkg_name);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{}", ui::error(&format!("Failed to install .deb package {}: {}", deb_file, e)));
+                }
             }
         } else {
             eprintln!("{}", ui::error(&format!("Skipping {}: debtap not available", deb_file)));
@@ -104,8 +117,10 @@ pub async fn install(
     let mut flatpak_packages = Vec::new();
     let mut snap_packages = Vec::new();
     let mut debian_packages = Vec::new();
-
-    // Find all packages
+    
+    // First, search for all packages
+    let mut all_candidates = Vec::new();
+    
     for (pkg_name, explicit_source) in &parsed_packages {
         // Determine search flags based on explicit source or command flags
         let (search_aur, search_repos, search_flatpak, search_snap, search_debian) = 
@@ -133,23 +148,38 @@ pub async fn install(
                 )
             };
 
-        // Find all possible sources for this package
-        let candidates = find_package_sources(
-            pkg_name,
-            &client,
-            config,
-            search_aur,
-            search_repos,
-            search_flatpak,
-            search_snap,
-            search_debian,
-            no_timeout,
-            Some(spinner.inner()),
-        ).await?;
+        // Check cache first
+        let candidates = if let Some(cached) = crate::cache::get_cached_search(pkg_name) {
+            spinner.inner().set_message(format!("Found '{}' in cache - {} sources", pkg_name, cached.len()));
+            cached
+        } else {
+            // Find all possible sources for this package
+            let found = find_package_sources(
+                pkg_name,
+                &client,
+                config,
+                search_aur,
+                search_repos,
+                search_flatpak,
+                search_snap,
+                search_debian,
+                no_timeout,
+                Some(spinner.inner()),
+            ).await?;
+            
+            // Cache the results
+            let _ = crate::cache::cache_search_results(pkg_name.clone(), found.clone());
+            found
+        };
         
-        // Clear spinner before showing selection UI
-        spinner.inner().finish_and_clear();
-
+        all_candidates.push((pkg_name.clone(), explicit_source.clone(), candidates));
+    }
+    
+    // Clear spinner after all searches complete
+    spinner.inner().finish_and_clear();
+    
+    // Now process all candidates and ask for selections
+    for (pkg_name, explicit_source, candidates) in all_candidates {
         let selected_index = if candidates.is_empty() {
             if explicit_source.is_some() {
                 warn!("Package {} not found in {}", pkg_name, explicit_source.as_ref().unwrap());
@@ -162,7 +192,7 @@ pub async fn install(
             0
         } else {
             // Multiple sources, ask user
-            match select_package_source(pkg_name, &candidates)? {
+            match select_package_source(&pkg_name, &candidates)? {
                 Some(idx) => idx,
                 None => {
                     println!("{}", ui::error("Selection cancelled"));
@@ -193,12 +223,6 @@ pub async fn install(
                 debian_packages.push(pkg.clone());
             }
         }
-        
-        // Recreate spinner for next package if there are more
-        if parsed_packages.len() > 1 {
-            // This is a bit of a hack, but we need to drop and recreate the spinner
-            // since we cleared it above
-        }
     }
 
     // Install repository packages first
@@ -219,7 +243,10 @@ pub async fn install(
         
         if !to_install.is_empty() {
             println!("\n{} {}", "::".bright_blue().bold(), format!("Installing {} repository packages...", to_install.len()).bold());
-            pacman::install_packages(&to_install, &Vec::new())?;
+            if let Err(e) = pacman::install_packages(&to_install, &Vec::new()) {
+                eprintln!("{}", ui::error(&format!("Failed to install repository packages: {}", e)));
+                eprintln!("{}", ui::info("Continuing with other packages..."));
+            }
         }
     }
 
@@ -270,7 +297,8 @@ pub async fn install(
                 }
                 Err(e) => {
                     spinner.finish_and_clear();
-                    return Err(e);
+                    eprintln!("{}", ui::error(&format!("Failed to download {}: {}", pkg.name, e)));
+                    eprintln!("{}", ui::info("Continuing with other packages..."));
                 }
             }
         }
@@ -383,6 +411,9 @@ pub async fn install(
                         // Convert and install with debtap
                         if let Err(e) = crate::debtap::install_deb(deb_path.to_str().unwrap()).await {
                             eprintln!("{}", ui::error(&format!("Failed to install {}: {}", pkg.name, e)));
+                        } else {
+                            // Track this package as installed from Debian
+                            let _ = crate::debian::track_debian_package(&pkg.name);
                         }
                     }
                     Err(e) => {
@@ -450,10 +481,31 @@ pub async fn upgrade_system(config: &mut Config, noconfirm: bool) -> Result<()> 
         }
     }
     
-    // Show all available updates in unified format
-    let total_updates = repo_updates.len() + aur_updates.len() + debian_updates.len();
+    // Check for Flatpak updates
+    let flatpak_updates = if crate::flatpak::is_available() {
+        let spinner = ui::spinner("Checking Flatpak packages...");
+        let updates = crate::flatpak::get_updates().unwrap_or_default();
+        spinner.finish_and_clear();
+        updates
+    } else {
+        Vec::new()
+    };
     
-    if total_updates == 0 {
+    // Check for Snap updates
+    let snap_updates = if crate::snap::is_available() {
+        let spinner = ui::spinner("Checking Snap packages...");
+        let updates = crate::snap::get_updates().unwrap_or_default();
+        spinner.finish_and_clear();
+        updates
+    } else {
+        Vec::new()
+    };
+    
+    // Show all available updates in unified format
+    let total_updates = repo_updates.len() + aur_updates.len() + debian_updates.len() + flatpak_updates.len() + snap_updates.len();
+    let has_other_updates = !flatpak_updates.is_empty() || !snap_updates.is_empty();
+    
+    if total_updates == 0 && !has_other_updates {
         println!("{}", ui::success("System is up to date"));
         return Ok(());
     }
@@ -489,11 +541,33 @@ pub async fn upgrade_system(config: &mut Config, noconfirm: bool) -> Result<()> 
         );
     }
     
+    // Show Flatpak updates
+    for (name, old_ver, new_ver) in &flatpak_updates {
+        println!("  {} {} -> {} {}", 
+            name.bold(),
+            old_ver.dimmed(),
+            new_ver.green(),
+            "[Flatpak]".bright_yellow()
+        );
+    }
+    
+    // Show Snap updates
+    for (name, old_ver, new_ver) in &snap_updates {
+        println!("  {} {} -> {} {}", 
+            name.bold(),
+            old_ver.dimmed(),
+            new_ver.green(),
+            "[Snap]".bright_yellow()
+        );
+    }
+    
     // Calculate download size for repo packages (if possible)
-    println!("\n{} Repository: {}, AUR: {}, Debian: {}", 
+    println!("\n{} Repository: {}, AUR: {}, Flatpak: {}, Snap: {}, Debian: {}", 
         "::".bright_blue().bold(),
         repo_updates.len(),
         aur_updates.len(),
+        flatpak_updates.len(),
+        snap_updates.len(),
         debian_updates.len()
     );
     
@@ -625,6 +699,8 @@ pub async fn upgrade_system(config: &mut Config, noconfirm: bool) -> Result<()> 
                     // Convert and install with debtap
                     match crate::debtap::install_deb(deb_path.to_str().unwrap()).await {
                         Ok(_) => {
+                            // Track this package as installed from Debian
+                            let _ = crate::debian::track_debian_package(name);
                             println!("{}", ui::success(&format!("{} upgraded successfully", name)));
                             upgraded_count += 1;
                         }
@@ -644,6 +720,33 @@ pub async fn upgrade_system(config: &mut Config, noconfirm: bool) -> Result<()> 
                 "::".bright_green().bold(), 
                 format!("Successfully upgraded {} Debian package(s)", upgraded_count).bold()
             );
+        }
+    }
+    
+    // Upgrade Flatpak packages
+    if !flatpak_updates.is_empty() {
+        println!("\n{} {}", "::".bright_blue().bold(), "Upgrading Flatpak packages...".bold());
+        match crate::flatpak::update_all() {
+            Ok(_) => {
+                println!("{}", ui::success(&format!("Successfully upgraded {} Flatpak package(s)", flatpak_updates.len())));
+            }
+            Err(e) => {
+                eprintln!("{}", ui::error(&format!("Failed to upgrade Flatpak packages: {}", e)));
+            }
+        }
+    }
+    
+    // Upgrade Snap packages
+    if !snap_updates.is_empty() {
+        println!("\n{} {}", "::".bright_blue().bold(), "Upgrading Snap packages...".bold());
+        println!("{}", ui::warning("Note: Snap update support is experimental and not fully tested"));
+        match crate::snap::update_all() {
+            Ok(_) => {
+                println!("{}", ui::success(&format!("Successfully upgraded {} Snap package(s)", snap_updates.len())));
+            }
+            Err(e) => {
+                eprintln!("{}", ui::error(&format!("Failed to upgrade Snap packages: {}", e)));
+            }
         }
     }
     
