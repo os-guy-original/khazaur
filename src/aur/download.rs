@@ -20,6 +20,10 @@ pub async fn download_package(
         match try_git_download(package_name, &pkg_dir).await {
             Ok(dir) => return Ok(dir),
             Err(e) => {
+                // Check if it's a permission error - don't fall back to tarball
+                if e.to_string().contains("Permission denied") || e.to_string().contains("Cannot remove existing directory") {
+                    return Err(e);
+                }
                 warn!("Git download failed, using tarball: {}", e);
             }
         }
@@ -33,7 +37,39 @@ async fn try_git_download(package_name: &str, pkg_dir: &PathBuf) -> Result<PathB
     let url = format!("https://aur.archlinux.org/{}.git", package_name);
     
     if pkg_dir.exists() {
-        // Check if there are built packages (.pkg.tar.* files)
+        // Check if it's a git repository
+        let git_dir = pkg_dir.join(".git");
+        if git_dir.exists() {
+            // It's a git repo, try to update it
+            match Repository::open(pkg_dir) {
+                Ok(repo) => {
+                    // Fetch and reset to latest
+                    match repo.find_remote("origin") {
+                        Ok(mut remote) => {
+                            if let Err(e) = remote.fetch(&["refs/heads/*:refs/heads/*"], None, None) {
+                                warn!("Failed to fetch updates: {}, will use existing version", e);
+                            } else {
+                                // Reset to origin/master or origin/main
+                                if let Ok(reference) = repo.find_reference("refs/heads/master") {
+                                    if let Ok(commit) = reference.peel_to_commit() {
+                                        let _ = repo.reset(commit.as_object(), git2::ResetType::Hard, None);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to find remote: {}, will use existing version", e);
+                        }
+                    }
+                    return Ok(pkg_dir.clone());
+                }
+                Err(e) => {
+                    warn!("Failed to open git repo: {}, will try to re-clone", e);
+                }
+            }
+        }
+        
+        // Not a git repo or failed to update, check if there are built packages
         let has_built_packages = std::fs::read_dir(pkg_dir)
             .ok()
             .and_then(|entries| {
@@ -55,7 +91,7 @@ async fn try_git_download(package_name: &str, pkg_dir: &PathBuf) -> Result<PathB
             return Ok(pkg_dir.clone());
         }
         
-        // Try to remove existing directory
+        // Try to remove existing directory to re-clone
         if let Err(e) = std::fs::remove_dir_all(pkg_dir) {
             return Err(KhazaurError::DownloadFailed(
                 format!(
