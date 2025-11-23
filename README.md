@@ -54,14 +54,35 @@ Written in Rust for performance and reliability.
 
 ## Installation
 
+### From AUR (Recommended)
 
-### Manual Build
+The easiest way to install khazaur on Arch Linux:
+
+```bash
+# Using an AUR helper (yay, paru, etc.)
+yay -S khazaur
+```
+
+### Manual Installation from PKGBUILD
+
+If you prefer to build manually without an AUR helper:
+
+```bash
+# Clone the repository
+git clone https://github.com/os-guy-original/khazaur.git
+cd khazaur
+
+# Build and install using makepkg
+makepkg -si
+```
+
+### Manual Build from Source
 
 Requirements:
 - Arch Linux or Arch-based distribution
 - Rust 1.70+
-- pacman and makepkg
-- libgit2, libssh2, openssl, zlib (build dependencies)
+- cargo and git
+- libgit2, libssh2, openssl, zlib (runtime dependencies)
 - Privilege escalation tool (pkexec, sudo, or doas)
 
 ```bash

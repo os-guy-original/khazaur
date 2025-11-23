@@ -1,6 +1,6 @@
 [package]
 name = "khazaur"
-version = "0.2.0"
+version = "0.2.0-beta"
 edition = "2021"
 authors = ["os-guy-original"]
 description = "Unified package manager for Arch Linux - AUR, repos, Flatpak, Snap, and Debian packages"
