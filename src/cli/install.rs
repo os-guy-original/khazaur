@@ -151,7 +151,29 @@ pub async fn install(
         // Check cache first
         let candidates = if let Some(cached) = crate::cache::get_cached_search(pkg_name) {
             spinner.inner().set_message(format!("Found '{}' in cache - {} sources", pkg_name, cached.len()));
-            cached
+            
+            // If cache is empty, remove it and search again (package might exist now)
+            if cached.is_empty() {
+                let _ = crate::cache::remove_cached_search(pkg_name);
+                let found = find_package_sources(
+                    pkg_name,
+                    &client,
+                    config,
+                    search_aur,
+                    search_repos,
+                    search_flatpak,
+                    search_snap,
+                    search_debian,
+                    no_timeout,
+                    Some(spinner.inner()),
+                ).await?;
+                
+                // Cache the new results
+                let _ = crate::cache::cache_search_results(pkg_name.clone(), found.clone());
+                found
+            } else {
+                cached
+            }
         } else {
             // Find all possible sources for this package
             let found = find_package_sources(
@@ -167,7 +189,7 @@ pub async fn install(
                 Some(spinner.inner()),
             ).await?;
             
-            // Cache the results
+            // Cache the results (even if empty, to avoid repeated searches)
             let _ = crate::cache::cache_search_results(pkg_name.clone(), found.clone());
             found
         };

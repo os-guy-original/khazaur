@@ -87,6 +87,7 @@ pub async fn find_package_sources(
         }
         debug!("Checking AUR for '{}'", package_name);
         
+        // First try exact match
         match client.info(package_name).await {
             Ok(pkg) => {
                 debug!("{} found in AUR", package_name);
@@ -96,7 +97,20 @@ pub async fn find_package_sources(
                 });
             }
             Err(_) => {
-                debug!("Not found in AUR");
+                // If exact match fails, try fuzzy search
+                debug!("Exact match not found in AUR, trying search...");
+                if let Ok(search_results) = client.search(package_name).await {
+                    for pkg in search_results {
+                        // Only add packages that contain the search term
+                        if pkg.name.to_lowercase().contains(&package_name.to_lowercase()) {
+                            debug!("Found '{}' in AUR via search", pkg.name);
+                            candidates.push(PackageCandidate {
+                                name: pkg.name.clone(),
+                                source: PackageSource::Aur(pkg),
+                            });
+                        }
+                    }
+                }
             }
         }
         

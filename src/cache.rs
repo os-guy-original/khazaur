@@ -103,6 +103,14 @@ pub fn cache_search_results(package_name: String, candidates: Vec<PackageCandida
     Ok(())
 }
 
+/// Remove a specific package from cache
+pub fn remove_cached_search(package_name: &str) -> Result<()> {
+    let mut cache = SearchCache::load();
+    cache.entries.remove(package_name);
+    cache.save()?;
+    Ok(())
+}
+
 /// Clear all cached search results
 #[allow(dead_code)]
 pub fn clear_search_cache() -> Result<()> {
