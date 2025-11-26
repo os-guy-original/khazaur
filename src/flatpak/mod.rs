@@ -246,9 +246,10 @@ pub fn get_updates() -> Result<Vec<(String, String, String)>> {
         }
     }
     
-    // Get list of updates
+    // Get list of updates - flatpak reports apps with updates available
+    // Note: version may be same if it's a runtime/dependency update
     let output = Command::new("flatpak")
-        .args(&["remote-ls", "--updates", "--columns=application,version"])
+        .args(&["remote-ls", "--updates", "--app", "--columns=application,version"])
         .output()?;
     
     if !output.status.success() {

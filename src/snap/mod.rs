@@ -184,6 +184,71 @@ pub fn uninstall_snap(package_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Parse snap info output to extract installed and available versions
+/// Returns (installed_version, available_version) or None if parsing fails
+fn parse_snap_versions(snap_name: &str) -> Option<(String, String)> {
+    let output = Command::new("snap")
+        .args(&["info", snap_name])
+        .output()
+        .ok()?;
+    
+    if !output.status.success() {
+        return None;
+    }
+    
+    let info = String::from_utf8_lossy(&output.stdout);
+    let mut installed_version = None;
+    let mut tracking_channel = None;
+    let mut available_version = None;
+    
+    // First pass: find installed version and tracking channel
+    for line in info.lines() {
+        let trimmed = line.trim();
+        
+        if trimmed.starts_with("installed:") {
+            // Format: "installed:          145.0.1-1               (7355) 262MB -"
+            // Extract version (first token after "installed:")
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 2 {
+                installed_version = Some(parts[1].to_string());
+            }
+        } else if trimmed.starts_with("tracking:") {
+            // Format: "tracking:     latest/stable"
+            let parts: Vec<&str> = trimmed.split_whitespace().collect();
+            if parts.len() >= 2 {
+                tracking_channel = Some(parts[1].to_string());
+            }
+        }
+    }
+    
+    // Second pass: find the version in the tracking channel
+    if let Some(channel) = &tracking_channel {
+        let channel_prefix = format!("{}:", channel);
+        
+        for line in info.lines() {
+            let trimmed = line.trim();
+            
+            if trimmed.starts_with(&channel_prefix) {
+                // Format: "latest/stable:    145.0.2-1    2025-11-26 (7423) 262MB -"
+                // Split by ':' and get the version (first token after colon)
+                if let Some(version_part) = trimmed.split(':').nth(1) {
+                    let parts: Vec<&str> = version_part.split_whitespace().collect();
+                    if !parts.is_empty() {
+                        available_version = Some(parts[0].to_string());
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Return both versions if found
+    match (installed_version, available_version) {
+        (Some(installed), Some(available)) => Some((installed, available)),
+        _ => None,
+    }
+}
+
 /// Get list of Snap packages with available updates
 /// Returns Vec of (name, current_version, new_version)
 pub fn get_updates() -> Result<Vec<(String, String, String)>> {
@@ -191,7 +256,7 @@ pub fn get_updates() -> Result<Vec<(String, String, String)>> {
         return Ok(Vec::new());
     }
     
-    // Get list of updates
+    // Get list of packages that have updates available
     let output = Command::new("snap")
         .args(&["refresh", "--list"])
         .output()?;
@@ -209,14 +274,20 @@ pub fn get_updates() -> Result<Vec<(String, String, String)>> {
             continue;
         }
         
-        // Snap output format: Name  Version  Rev  Publisher  Notes
-        // We need columns: Name (0), Current Version (1), New Version (2)
+        // Extract snap name (first column)
         let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 3 {
-            let name = parts[0].to_string();
-            let current = parts[1].to_string();
-            let new_ver = parts[2].to_string();
-            updates.push((name, current, new_ver));
+        if parts.is_empty() {
+            continue;
+        }
+        
+        let name = parts[0].to_string();
+        
+        // Get versions for this snap
+        if let Some((installed, available)) = parse_snap_versions(&name) {
+            // Only add if versions are different
+            if installed != available {
+                updates.push((name, installed, available));
+            }
         }
     }
     
