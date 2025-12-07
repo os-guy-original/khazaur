@@ -89,6 +89,22 @@ pub struct Args {
     #[arg(long = "completions", value_name = "SHELL")]
     pub completions: Option<String>,
 
+    /// Clean package cache (-c for khazaur only, -cc for khazaur + pacman)
+    #[arg(short = 'c', action = clap::ArgAction::Count)]
+    pub clean: u8,
+
+    /// Build package from directory containing PKGBUILD (-B)
+    #[arg(short = 'B', long = "build")]
+    pub build: bool,
+
+    /// Download PKGBUILD for AUR package(s) (-G)
+    #[arg(short = 'G', long = "getpkgbuild")]
+    pub getpkgbuild: bool,
+
+    /// Show AUR package information (-P)
+    #[arg(short = 'P', long = "show")]
+    pub show: bool,
+
     /// Package names or search query
     pub packages: Vec<String>,
 }
@@ -179,6 +195,42 @@ impl Args {
         // -Q: Query installed packages
         if self.query {
             return self.query_packages();
+        }
+
+        // -Sc or -Scc: Clean caches (with -S flag)
+        if self.sync && self.clean > 0 {
+            return self.clean_cache();
+        }
+
+        // Standalone -c or -cc: Clean caches
+        if self.clean > 0 {
+            return self.clean_cache();
+        }
+
+        // -B: Build package from directory
+        if self.build {
+            let dir = if self.packages.is_empty() {
+                ".".to_string()
+            } else {
+                self.packages[0].clone()
+            };
+            return self.build_package(&dir);
+        }
+
+        // -G: Download PKGBUILD for AUR package(s)
+        if self.getpkgbuild {
+            if self.packages.is_empty() {
+                return Err(KhazaurError::Config("Package name(s) required".to_string()).into());
+            }
+            return self.get_pkgbuild(&self.packages, &mut config).await;
+        }
+
+        // -P: Show AUR package information
+        if self.show {
+            if self.packages.is_empty() {
+                return Err(KhazaurError::Config("Package name(s) required".to_string()).into());
+            }
+            return self.show_aur_packages(&self.packages, &mut config).await;
         }
 
         // Auto-detect .deb files for installation (if no other operation flags are set)
@@ -668,6 +720,290 @@ impl Args {
         let bin_name = cmd.get_name().to_string();
         
         generate(shell_type, &mut cmd, bin_name, &mut io::stdout());
+        
+        Ok(())
+    }
+
+    fn clean_cache(&self) -> Result<()> {
+        use dialoguer::{theme::ColorfulTheme, Confirm};
+        use std::process::Command;
+        
+        println!("{}", ui::section_header("Cleaning Package Cache"));
+        
+        // Get khazaur cache directory
+        let cache_dir = crate::dirs::cache_dir()?;
+        let clone_dir = cache_dir.join("clone");
+        
+        // -cc: Clean pacman cache first
+        if self.clean >= 2 {
+            println!("\n{}", ui::info("Cleaning pacman package cache..."));
+            
+            let confirm = Confirm::with_theme(&ColorfulTheme::default())
+                .with_prompt("Clean pacman cache (/var/cache/pacman/pkg/)?")
+                .default(true)
+                .interact()?;
+            
+            if confirm {
+                let status = Command::new("sudo")
+                    .args(["pacman", "-Sc", "--noconfirm"])
+                    .status();
+                
+                match status {
+                    Ok(s) if s.success() => {
+                        println!("{}", ui::success("Pacman cache cleaned"));
+                    }
+                    Ok(_) => {
+                        eprintln!("{}", ui::warning("Failed to clean pacman cache (may require sudo)"));
+                    }
+                    Err(e) => {
+                        eprintln!("{}", ui::warning(&format!("Failed to run pacman -Sc: {}", e)));
+                    }
+                }
+            } else {
+                println!("{}", ui::info("Skipping pacman cache"));
+            }
+        }
+        
+        // -c or -cc: Clean khazaur AUR cache with per-folder confirmation
+        println!("\n{}", ui::info("Cleaning khazaur AUR cache..."));
+        
+        if clone_dir.exists() {
+            let entries: Vec<_> = std::fs::read_dir(&clone_dir)?
+                .filter_map(|e| e.ok())
+                .collect();
+            
+            if entries.is_empty() {
+                println!("{}", ui::info("Khazaur cache is already empty"));
+            } else {
+                println!("{}", ui::info(&format!("Found {} cached AUR package(s)", entries.len())));
+                
+                let mut removed = 0;
+                let mut skipped = 0;
+                
+                for entry in entries {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    let path = entry.path();
+                    
+                    // Calculate size
+                    let size = Self::dir_size(&path).unwrap_or(0);
+                    let size_str = Self::format_size(size);
+                    
+                    let confirm = Confirm::with_theme(&ColorfulTheme::default())
+                        .with_prompt(format!("Remove '{}' ({})?", name, size_str))
+                        .default(true)
+                        .interact()?;
+                    
+                    if confirm {
+                        match std::fs::remove_dir_all(&path) {
+                            Ok(_) => {
+                                println!("{}", ui::success(&format!("Removed: {}", name)));
+                                removed += 1;
+                            }
+                            Err(e) => {
+                                eprintln!("{}", ui::warning(&format!(
+                                    "Failed to remove '{}': {}. Try: sudo rm -rf {:?}",
+                                    name, e, path
+                                )));
+                            }
+                        }
+                    } else {
+                        skipped += 1;
+                    }
+                }
+                
+                println!("\n{}", ui::info(&format!("Removed: {}, Skipped: {}", removed, skipped)));
+            }
+        } else {
+            println!("{}", ui::info("Khazaur cache directory does not exist"));
+        }
+        
+        println!("\n{}", ui::success("Cache cleaning complete"));
+        Ok(())
+    }
+
+    fn dir_size(path: &std::path::Path) -> std::io::Result<u64> {
+        let mut size = 0;
+        if path.is_dir() {
+            for entry in std::fs::read_dir(path)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_dir() {
+                    size += Self::dir_size(&path)?;
+                } else {
+                    size += entry.metadata()?.len();
+                }
+            }
+        } else {
+            size = std::fs::metadata(path)?.len();
+        }
+        Ok(size)
+    }
+
+    fn format_size(bytes: u64) -> String {
+        const KB: u64 = 1024;
+        const MB: u64 = KB * 1024;
+        const GB: u64 = MB * 1024;
+        
+        if bytes >= GB {
+            format!("{:.2} GB", bytes as f64 / GB as f64)
+        } else if bytes >= MB {
+            format!("{:.2} MB", bytes as f64 / MB as f64)
+        } else if bytes >= KB {
+            format!("{:.2} KB", bytes as f64 / KB as f64)
+        } else {
+            format!("{} B", bytes)
+        }
+    }
+
+    fn build_package(&self, dir: &str) -> Result<()> {
+        use std::path::Path;
+        
+        println!("{}", ui::section_header("Building AUR Package"));
+        
+        let pkg_dir = Path::new(dir);
+        let pkgbuild = pkg_dir.join("PKGBUILD");
+        
+        if !pkgbuild.exists() {
+            return Err(KhazaurError::Config(format!(
+                "PKGBUILD not found in '{}'. Use -G to download one first.",
+                dir
+            )).into());
+        }
+        
+        println!("{}", ui::info(&format!("Building from: {:?}", pkg_dir.canonicalize().unwrap_or(pkg_dir.to_path_buf()))));
+        
+        // Build and install using makepkg
+        crate::build::build_and_install(pkg_dir, true)?;
+        
+        println!("\n{}", ui::success("Package built and installed successfully"));
+        Ok(())
+    }
+
+    async fn get_pkgbuild(&self, packages: &[String], config: &mut Config) -> Result<()> {
+        use crate::aur::AurClient;
+        use std::path::PathBuf;
+        
+        println!("{}", ui::section_header("Downloading PKGBUILD(s)"));
+        
+        // Check if last argument is a path (contains /, starts with ~, or is . or ..)
+        let (pkg_names, output_dir): (&[String], PathBuf) = if packages.len() > 1 {
+            let last = &packages[packages.len() - 1];
+            if last.contains('/') || last.starts_with('~') || last == "." || last == ".." {
+                // Expand ~ to home directory
+                let expanded = if last.starts_with('~') {
+                    dirs::home_dir()
+                        .map(|h| h.join(&last[2..]))  // Skip "~/"
+                        .unwrap_or_else(|| PathBuf::from(last))
+                } else {
+                    PathBuf::from(last)
+                };
+                
+                // Create directory if it doesn't exist
+                if !expanded.exists() {
+                    std::fs::create_dir_all(&expanded)?;
+                }
+                
+                (&packages[..packages.len() - 1], expanded)
+            } else {
+                (packages, std::env::current_dir()?)
+            }
+        } else {
+            (packages, std::env::current_dir()?)
+        };
+        
+        let client = AurClient::with_rate_limit(config.max_concurrent_requests, config.request_delay_ms)?;
+        
+        for pkg_name in pkg_names {
+            println!("\n{}", ui::info(&format!("Downloading: {}", pkg_name)));
+            
+            // Check if package exists in AUR
+            let results = client.search(pkg_name).await?;
+            let exact_match = results.iter().find(|p| p.name == *pkg_name);
+            
+            if exact_match.is_none() {
+                eprintln!("{}", ui::warning(&format!("Package '{}' not found in AUR", pkg_name)));
+                continue;
+            }
+            
+            // Download to output directory
+            let target_dir = output_dir.join(pkg_name);
+            
+            if target_dir.exists() {
+                println!("{}", ui::warning(&format!("Directory '{}' already exists, skipping", pkg_name)));
+                continue;
+            }
+            
+            // Clone the AUR repo
+            let url = format!("https://aur.archlinux.org/{}.git", pkg_name);
+            
+            match git2::Repository::clone(&url, &target_dir) {
+                Ok(_) => {
+                    println!("{}", ui::success(&format!("Downloaded to: {:?}", target_dir)));
+                }
+                Err(e) => {
+                    eprintln!("{}", ui::error(&format!("Failed to download '{}': {}", pkg_name, e)));
+                }
+            }
+        }
+        
+        println!("\n{}", ui::success("PKGBUILD download complete"));
+        Ok(())
+    }
+
+    async fn show_aur_packages(&self, packages: &[String], config: &mut Config) -> Result<()> {
+        use crate::aur::AurClient;
+        
+        println!("{}", ui::section_header("AUR Package Information"));
+        
+        let client = AurClient::with_rate_limit(config.max_concurrent_requests, config.request_delay_ms)?;
+        
+        for pkg_name in packages {
+            match client.info(pkg_name).await {
+                Ok(pkg) => {
+                    println!("\n{} {}", "::".bright_cyan().bold(), pkg.name.bold());
+                    println!("  {} {}", "Version:".dimmed(), pkg.version);
+                    
+                    if let Some(desc) = &pkg.description {
+                        println!("  {} {}", "Description:".dimmed(), desc);
+                    }
+                    
+                    if let Some(url) = &pkg.url {
+                        println!("  {} {}", "Upstream URL:".dimmed(), url);
+                    }
+                    
+                    println!("  {} https://aur.archlinux.org/packages/{}", "AUR URL:".dimmed(), pkg.name);
+                    
+                    if let Some(maintainer) = &pkg.maintainer {
+                        println!("  {} {}", "Maintainer:".dimmed(), maintainer);
+                    }
+                    
+                    println!("  {} {}", "Votes:".dimmed(), pkg.num_votes);
+                    println!("  {} {:.2}", "Popularity:".dimmed(), pkg.popularity);
+                    
+                    if let Some(ood) = pkg.out_of_date {
+                        if ood > 0 {
+                            println!("  {} {}", "Out of Date:".dimmed(), "Yes".red());
+                        }
+                    }
+                    
+                    if !pkg.depends.is_empty() {
+                        println!("  {} {}", "Depends:".dimmed(), pkg.depends.join(", "));
+                    }
+                    
+                    if !pkg.make_depends.is_empty() {
+                        println!("  {} {}", "Make Depends:".dimmed(), pkg.make_depends.join(", "));
+                    }
+                    
+                    if !pkg.opt_depends.is_empty() {
+                        println!("  {} {}", "Optional Deps:".dimmed(), pkg.opt_depends.join(", "));
+                    }
+                }
+                Err(e) => {
+                    // AUR might return error if package not found
+                    eprintln!("{}", ui::warning(&format!("Package '{}' not found or error: {}", pkg_name, e)));
+                }
+            }
+        }
         
         Ok(())
     }
