@@ -525,12 +525,6 @@ pub async fn upgrade_system(config: &mut Config, noconfirm: bool) -> Result<()> 
     
     // Show all available updates in unified format
     let total_updates = repo_updates.len() + aur_updates.len() + debian_updates.len() + flatpak_updates.len() + snap_updates.len();
-    let has_other_updates = !flatpak_updates.is_empty() || !snap_updates.is_empty();
-    
-    if total_updates == 0 && !has_other_updates {
-        println!("{}", ui::success("System is up to date"));
-        return Ok(());
-    }
     
     println!("\n{} {}", "::".bright_blue().bold(), format!("Packages ({}):", total_updates).bold());
     
@@ -593,6 +587,13 @@ pub async fn upgrade_system(config: &mut Config, noconfirm: bool) -> Result<()> 
         debian_updates.len()
     );
     
+    // If no updates, show message and return
+    if total_updates == 0 {
+        println!("\n{}", ui::success("System is up to date"));
+        return Ok(());
+    }
+    
+
     // Ask for confirmation unless noconfirm is set
     if !noconfirm {
         use dialoguer::{theme::ColorfulTheme, Confirm};
