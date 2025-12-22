@@ -100,37 +100,57 @@ pub async fn check_and_prompt_snapd(config: &mut Config) -> Result<()> {
     
     let choice = dialoguer::Select::new()
         .with_prompt("Install snapd?")
-        .items(&["Install now", "Skip for now", "Never ask again"])
+        .items(&["Install now (from AUR)", "Skip for now", "Never ask again"])
         .default(1)
         .interact_opt()?;
     
     match choice {
         Some(0) => {
-            // Install snapd from official repos using pacman
-            println!("{}", ui::info("Installing snapd..."));
-            crate::pacman::install_packages(&vec!["snapd".to_string()], &Vec::new())?;
-            println!("{}", ui::success("Snapd installed successfully"));
+            // Install snapd from AUR (it's not in official repos)
+            println!("{}", ui::info("Installing snapd from AUR..."));
             
-            // Enable and start snapd services
-            println!("{}", ui::info("Enabling snapd services..."));
+            let packages = vec!["snapd".to_string()];
+            let result = Box::pin(crate::cli::install::install(
+                &packages,
+                config,
+                true, // noconfirm
+                true, // only_aur - force AUR since snapd is only in AUR
+                false, // only_repos
+                false, // only_flatpak
+                false, // only_snap
+                false, // only_debian
+                false, // no_timeout
+            )).await;
             
-            if run_privileged(&["systemctl", "enable", "--now", "snapd.socket"])? {
-                println!("{}", ui::success("Snapd socket enabled"));
-            } else {
-                eprintln!("{}", ui::warning("Failed to enable snapd socket"));
-            }
-            
-            // Create the classic snap symlink if it doesn't exist
-            if !std::path::Path::new("/snap").exists() {
-                println!("{}", ui::info("Creating /snap symlink..."));
-                if run_privileged(&["ln", "-s", "/var/lib/snapd/snap", "/snap"])? {
-                    println!("{}", ui::success("Snap symlink created"));
-                } else {
-                    eprintln!("{}", ui::warning("Failed to create /snap symlink"));
+            match result {
+                Ok(_) => {
+                    println!("{}", ui::success("Snapd installed successfully"));
+                    
+                    // Enable and start snapd services
+                    println!("{}", ui::info("Enabling snapd services..."));
+                    
+                    if run_privileged(&["systemctl", "enable", "--now", "snapd.socket"])? {
+                        println!("{}", ui::success("Snapd socket enabled"));
+                    } else {
+                        eprintln!("{}", ui::warning("Failed to enable snapd socket"));
+                    }
+                    
+                    // Create the classic snap symlink if it doesn't exist
+                    if !std::path::Path::new("/snap").exists() {
+                        println!("{}", ui::info("Creating /snap symlink..."));
+                        if run_privileged(&["ln", "-s", "/var/lib/snapd/snap", "/snap"])? {
+                            println!("{}", ui::success("Snap symlink created"));
+                        } else {
+                            eprintln!("{}", ui::warning("Failed to create /snap symlink"));
+                        }
+                    }
+                    
+                    println!("{}", ui::info("You may need to log out and back in for snap to work properly"));
+                }
+                Err(e) => {
+                    eprintln!("{}", ui::error(&format!("Failed to install snapd: {}", e)));
                 }
             }
-            
-            println!("{}", ui::info("You may need to log out and back in for snap to work properly"));
         }
         Some(1) => {
             // Skip for now

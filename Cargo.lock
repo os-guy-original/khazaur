@@ -1180,7 +1180,7 @@ dependencies = [
 
 [[package]]
 name = "khazaur"
-version = "0.5.1-bugfix"
+version = "0.5.6-bugfix"
 dependencies = [
  "anyhow",
  "clap 4.5.53",

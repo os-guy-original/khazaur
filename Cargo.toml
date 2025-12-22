@@ -1,6 +1,6 @@
 [package]
 name = "khazaur"
-version = "0.5.1-bugfix"
+version = "0.5.6-bugfix"
 edition = "2024"
 authors = ["os-guy-original"]
 description = "Unified package manager for Arch Linux - AUR, repos, Flatpak, Snap, and Debian packages"

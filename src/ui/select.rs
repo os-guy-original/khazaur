@@ -1,6 +1,7 @@
 use crate::cli::PackageCandidate;
 use crate::error::Result;
 use colored::Colorize;
+use console::Term;
 use dialoguer::{theme::ColorfulTheme, Select};
 
 /// Display package candidates and let user select which source to use
@@ -36,12 +37,44 @@ pub fn select_package_source(package_name: &str, candidates: &[PackageCandidate]
             item
         })
         .collect();
-        
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt(format!("Select package source for '{}'", package_name))
+    
+    // Calculate max visible items based on terminal height
+    // Reserve lines for: prompt (1), header text (3), footer/scroll indicator (2), some padding (2)
+    let max_height = get_terminal_max_items(8);
+    
+    let theme = ColorfulTheme::default();
+    let mut select = Select::with_theme(&theme)
+        .with_prompt(format!("Select package source for '{}' (↑/↓ to scroll, Enter to select)", package_name))
         .items(&items)
-        .default(0)
-        .interact_opt()?;
+        .default(0);
+    
+    // Only apply max_length if we have more items than can fit
+    if items.len() > max_height {
+        select = select.max_length(max_height);
+    }
+    
+    let selection = select.interact_opt()?;
         
     Ok(selection)
+}
+
+/// Get the maximum number of items that can be displayed in the terminal
+/// Returns a reasonable default if terminal size cannot be determined
+fn get_terminal_max_items(reserved_lines: usize) -> usize {
+    // Try to get terminal height
+    let term = Term::stderr();
+    let height = term.size().0 as usize;
+    
+    // Default to 20 if we can't get terminal size or it's too small
+    if height <= reserved_lines {
+        return 15;
+    }
+    
+    // Calculate available lines and ensure a reasonable minimum
+    let available = height.saturating_sub(reserved_lines);
+    
+    // For items with descriptions (2 lines each), divide by 2
+    // But ensure at least 5 items are visible
+    let max_items = available / 2;
+    max_items.max(5)
 }

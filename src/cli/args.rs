@@ -483,6 +483,7 @@ impl Args {
                 let selections = MultiSelect::with_theme(&ColorfulTheme::default())
                     .with_prompt("Select packages to remove (Space to select, Enter to confirm)")
                     .items(&items)
+                    .max_length(15)
                     .interact()?;
                 
                 if selections.is_empty() {
