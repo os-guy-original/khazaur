@@ -9,7 +9,35 @@ use crate::resolver::Resolver;
 use crate::snap;
 use crate::ui::{self, select_package_source};
 use colored::*;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use tracing::{debug, warn};
+
+/// Prompt user about removing make dependencies after installation
+fn prompt_remove_make_deps(pkg: &AurPackage, noconfirm: bool) -> Result<bool> {
+    if pkg.make_depends.is_empty() {
+        return Ok(false);
+    }
+
+    if noconfirm {
+        // If noconfirm is set, we assume the user wants the default behavior (don't remove)
+        return Ok(false);
+    }
+
+    let make_deps_list = pkg.make_depends.join(", ");
+    let prompt = format!(
+        "Remove make dependencies ({}) after installing {}?",
+        make_deps_list,
+        pkg.name
+    );
+
+    let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt(prompt)
+        .default(false)
+        .interact()?;
+
+    Ok(confirmed)
+}
+
 
 /// Install packages from AUR, repos, Flatpak, Snap and Debian
 pub async fn install(
@@ -148,51 +176,19 @@ pub async fn install(
                 )
             };
 
-        // Check cache first
-        let candidates = if let Some(cached) = crate::cache::get_cached_search(pkg_name) {
-            spinner.inner().set_message(format!("Found '{}' in cache - {} sources", pkg_name, cached.len()));
-            
-            // If cache is empty, remove it and search again (package might exist now)
-            if cached.is_empty() {
-                let _ = crate::cache::remove_cached_search(pkg_name);
-                let found = find_package_sources(
-                    pkg_name,
-                    &client,
-                    config,
-                    search_aur,
-                    search_repos,
-                    search_flatpak,
-                    search_snap,
-                    search_debian,
-                    no_timeout,
-                    Some(spinner.inner()),
-                ).await?;
-                
-                // Cache the new results
-                let _ = crate::cache::cache_search_results(pkg_name.clone(), found.clone());
-                found
-            } else {
-                cached
-            }
-        } else {
-            // Find all possible sources for this package
-            let found = find_package_sources(
-                pkg_name,
-                &client,
-                config,
-                search_aur,
-                search_repos,
-                search_flatpak,
-                search_snap,
-                search_debian,
-                no_timeout,
-                Some(spinner.inner()),
-            ).await?;
-            
-            // Cache the results (even if empty, to avoid repeated searches)
-            let _ = crate::cache::cache_search_results(pkg_name.clone(), found.clone());
-            found
-        };
+        // Find all possible sources for this package
+        let candidates = find_package_sources(
+            pkg_name,
+            &client,
+            config,
+            search_aur,
+            search_repos,
+            search_flatpak,
+            search_snap,
+            search_debian,
+            no_timeout,
+            Some(spinner.inner()),
+        ).await?;
         
         all_candidates.push((pkg_name.clone(), explicit_source.clone(), candidates));
     }
@@ -370,15 +366,18 @@ pub async fn install(
         let mut installed_count = 0;
         if !packages_to_build.is_empty() {
             println!("\n{} {}", "::".bright_blue().bold(), "Building packages...".bold());
-            
+
             for &idx in &packages_to_build {
                 let pkg = &to_install[idx];
                 let pkg_dir = &package_dirs[idx];
-                
+
+                // Prompt user about removing make dependencies after installation
+                let remove_make_deps = prompt_remove_make_deps(pkg, noconfirm)?;
+
                 println!("\n{} {}", "::".bright_cyan(), format!("Building {}...", pkg.name).bold());
-                
-                // Build and install with makepkg
-                match build::build_and_install(pkg_dir, true) {
+
+                // Build and install with makepkg, with optional make dependency removal
+                match build::build_and_install_with_make_deps_cleanup(pkg_dir, true, pkg, config, remove_make_deps) {
                     Ok(_) => {
                         println!("{}", ui::success(&format!("{} installed successfully", pkg.name)));
                         installed_count += 1;
@@ -681,14 +680,34 @@ pub async fn upgrade_system(config: &mut Config, noconfirm: bool) -> Result<()> 
         // Build and install packages
         println!("\n{} {}", "::".bright_blue().bold(), "Building and installing AUR packages...".bold());
         let mut upgraded_count = 0;
-        
+
         for &idx in &packages_to_build {
             let pkg = &aur_pkgs[idx];
             let pkg_dir = &package_dirs[idx];
-            
+
+            // For upgrades, we'll check if user wants to remove make dependencies
+            // but we'll default to not removing them during upgrades to be safe
+            let remove_make_deps = if !noconfirm {
+                let make_deps_list = pkg.make_depends.join(", ");
+                let prompt = format!(
+                    "Remove make dependencies ({}) after upgrading {}?",
+                    make_deps_list,
+                    pkg.name
+                );
+
+                let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+                    .with_prompt(prompt)
+                    .default(false)  // Default to false for upgrades
+                    .interact()?;
+
+                confirmed
+            } else {
+                false  // Don't remove make deps during upgrades with noconfirm
+            };
+
             println!("\n{} {}", "::".bright_cyan(), format!("Building {}...", pkg.name).bold());
-            
-            match build::build_and_install(pkg_dir, true) {
+
+            match build::build_and_install_with_make_deps_cleanup(pkg_dir, true, pkg, config, remove_make_deps) {
                 Ok(_) => {
                     println!("{}", ui::success(&format!("{} upgraded successfully", pkg.name)));
                     upgraded_count += 1;
