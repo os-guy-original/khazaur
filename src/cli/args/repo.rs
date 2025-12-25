@@ -1,7 +1,7 @@
 use crate::error::Result;
 use crate::ui;
 use super::MakeRepoCommand;
-use dialoguer::{theme::ColorfulTheme, Select, Input, Confirm, FuzzySelect};
+use dialoguer::{theme::ColorfulTheme, Select, Input, Confirm};
 use colored::Colorize;
 
 pub async fn handle_repo_command(action: &MakeRepoCommand) -> Result<()> {

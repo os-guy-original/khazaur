@@ -14,9 +14,7 @@ pub fn check_health() -> Result<()> {
     match Command::new("systemctl").args(["--failed", "--no-pager"]).output() {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            let failed_count = stdout.lines().filter(|l| l.contains("loaded units listed")).count(); // Basic heuristic, or parse lines
-            // Better: '0 loaded units listed' means clean.
-            
+            // Check if there are any failed units
             if stdout.contains("0 loaded units listed") {
                  println!("  {}", "✓ No failed services found".green());
             } else {
@@ -63,7 +61,7 @@ pub fn check_health() -> Result<()> {
             for line in stdout.lines().skip(1) { // Skip header if repeated or just let it be
                 println!("  {}", line);
                 // Heuristic: check if Use% > 90%
-                if let Some(pos) = line.find('%') {
+                if line.contains('%') {
                      // Parse number before %
                      // This is brittle parsing, but helpful warning
                      // e.g. " /dev/sda1 ... 12G 95% /"

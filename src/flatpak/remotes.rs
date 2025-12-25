@@ -3,6 +3,7 @@ use std::process::Command;
 
 pub struct FlatpakRemote {
     pub name: String,
+    #[allow(dead_code)] // Parsed from flatpak output, reserved for verbose display
     pub title: String,
     pub url: String,
 }
@@ -78,6 +79,7 @@ pub struct SuggestedRemote {
     pub name: String,
     pub title: String,
     pub url: String,
+    #[allow(dead_code)] // Reserved for verbose/detailed display mode
     pub description: String,
 }
 

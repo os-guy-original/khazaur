@@ -1,5 +1,5 @@
 use crate::ui;
-use crate::error::{KhazaurError, Result};
+use crate::error::Result;
 use std::process::Command;
 
 use dialoguer::{theme::ColorfulTheme, Confirm};
