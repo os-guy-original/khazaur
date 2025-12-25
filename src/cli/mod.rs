@@ -5,6 +5,7 @@ pub mod interactive;
 pub mod package_source;
 pub mod source_finder;
 pub mod optional_deps;
+pub mod selector;
 
 use crate::error::Result;
 pub use args::Args;

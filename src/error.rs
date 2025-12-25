@@ -31,6 +31,7 @@ pub enum KhazaurError {
 
 
 
+
     #[error("Dialog error: {0}")]
     Dialog(String),
 }

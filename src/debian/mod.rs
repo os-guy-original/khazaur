@@ -13,6 +13,7 @@ pub struct DebianPackage {
     pub filename: String,
     pub md5sum: String,
     pub architecture: String,
+    pub maintainer: Option<String>,
 }
 
 const DEBIAN_MIRROR: &str = "http://deb.debian.org/debian";
@@ -146,6 +147,7 @@ async fn fetch_and_parse_index(show_progress: bool) -> Result<Vec<DebianPackage>
                         filename: String::new(),
                         md5sum: String::new(),
                         architecture: arch_mapped.to_string(),
+                        maintainer: None,
                     });
                 }
                 "Version" => {
@@ -166,6 +168,11 @@ async fn fetch_and_parse_index(show_progress: bool) -> Result<Vec<DebianPackage>
                 "MD5sum" => {
                     if let Some(ref mut pkg) = current_package {
                         pkg.md5sum = value.to_string();
+                    }
+                }
+                "Maintainer" => {
+                    if let Some(ref mut pkg) = current_package {
+                        pkg.maintainer = Some(value.to_string());
                     }
                 }
                 _ => {}

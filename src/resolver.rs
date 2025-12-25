@@ -12,6 +12,8 @@ pub struct Resolver {
     resolved: HashSet<String>,
     /// Resolution order
     order: Vec<String>,
+    /// Cache for repository package checks to avoid repeated system calls
+    repo_cache: HashMap<String, bool>,
 }
 
 impl Resolver {
@@ -19,6 +21,7 @@ impl Resolver {
         Self {
             resolved: HashSet::new(),
             order: Vec::new(),
+            repo_cache: HashMap::new(),
         }
     }
 
@@ -72,19 +75,19 @@ impl Resolver {
         // Resolve dependencies first
         for dep in &pkg.all_depends() {
             let dep_name = extract_package_name(dep);
-            
+
             // Skip if in official repos or already installed
             if pacman::is_installed(&dep_name).unwrap_or(false) {
                 debug!("{} is already installed", dep_name);
                 continue;
             }
-            
-            // Check if in official repos
-            if is_in_repos(&dep_name) {
+
+            // Check if in official repos using cached method
+            if self.is_in_repos(&dep_name) {
                 debug!("{} is in official repos", dep_name);
                 continue;
             }
-            
+
             // Recursively resolve AUR dependency
             self.resolve_package(&dep_name, aur_map, aur_client).await?;
         }
@@ -95,6 +98,23 @@ impl Resolver {
 
         Ok(())
         })
+    }
+
+    /// Check if package is in official repositories using cache to avoid repeated system calls
+    fn is_in_repos(&mut self, package_name: &str) -> bool {
+        // Check cache first
+        if let Some(&cached_result) = self.repo_cache.get(package_name) {
+            return cached_result;
+        }
+
+        // Query pacman and cache the result
+        let result = pacman::get_repo_info(package_name)
+            .ok()
+            .flatten()
+            .is_some();
+
+        self.repo_cache.insert(package_name.to_string(), result);
+        result
     }
 }
 
@@ -110,12 +130,4 @@ fn extract_package_name(dep: &str) -> String {
         .next()
         .unwrap_or(dep)
         .to_string()
-}
-
-/// Check if package is in official repositories
-fn is_in_repos(package_name: &str) -> bool {
-    pacman::get_repo_info(package_name)
-        .ok()
-        .flatten()
-        .is_some()
 }

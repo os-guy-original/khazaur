@@ -2,6 +2,7 @@ use crate::aur::AurPackage;
 use crate::pacman::RepoPackage;
 use crate::flatpak::FlatpakPackage;
 use crate::snap::SnapPackage;
+use crate::debian::DebianPackage;
 use colored::*;
 
 /// Format a section header
@@ -178,3 +179,34 @@ pub fn format_snap_packages(packages: &[SnapPackage]) -> String {
 
     output
 }
+
+/// Format pkg from Debian
+pub fn format_debian_packages(packages: &[DebianPackage]) -> String {
+    if packages.is_empty() {
+        return "No packages found".dimmed().to_string();
+    }
+
+    let mut output = String::new();
+    
+    for pkg in packages {
+        let name = pkg.name.bright_white();
+        let version = pkg.version.bright_blue();
+        
+        let maintainer_raw = pkg.maintainer.as_deref().unwrap_or("Unknown");
+        let maintainer_clean = maintainer_raw.split('<').next().unwrap_or(maintainer_raw).trim();
+        let maintainer = maintainer_clean.bright_green();
+        
+        output.push_str(&format!(
+            "{}/{} {} ({})\n",
+            "debian".bright_red(), // Debian red
+            name,
+            version,
+            maintainer
+        ));
+        
+        output.push_str(&format!("    - {}\n", pkg.description.dimmed()));
+    }
+
+    output
+}
+

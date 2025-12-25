@@ -250,3 +250,22 @@ mod tests {
         );
     }
 }
+
+/// Update all Flatpak packages
+pub fn update_all() -> Result<()> {
+    use crate::error::KhazaurError;
+    
+    if !super::is_available() {
+        return Err(KhazaurError::Config("Flatpak is not installed".to_string()));
+    }
+    
+    let status = Command::new("flatpak")
+        .args(&["update", "-y"])
+        .status()?;
+    
+    if !status.success() {
+        return Err(KhazaurError::Config("Flatpak update failed".to_string()));
+    }
+    
+    Ok(())
+}

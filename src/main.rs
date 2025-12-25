@@ -11,6 +11,7 @@ mod flatpak;
 mod snap;
 mod debtap;
 mod debian;
+mod history;
 
 use anyhow::Result;
 use clap::Parser;

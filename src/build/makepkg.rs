@@ -6,6 +6,13 @@ use std::path::Path;
 use std::process::Command;
 use tracing::info;
 
+/// Check if the output from makepkg contains PGP-related errors
+
+
+
+
+
+
 /// Build and install a package using makepkg
 pub fn build_and_install(package_dir: &Path, install: bool) -> Result<()> {
     info!("Building package in {:?}", package_dir);
@@ -24,7 +31,8 @@ pub fn build_and_install(package_dir: &Path, install: bool) -> Result<()> {
         args.push("-i"); // Install after building
     }
 
-    // Just run makepkg directly - let it handle all output/prompts
+    // First, try running makepkg with user interaction allowed (don't capture output)
+    // But we'll try to run with better error handling
     let status = Command::new("makepkg")
         .args(&args)
         .current_dir(package_dir)
@@ -35,6 +43,61 @@ pub fn build_and_install(package_dir: &Path, install: bool) -> Result<()> {
 
         // Exit code 8 typically means dependency resolution failed
         if exit_code == 8 {
+            // Let's try to determine what dependencies are needed and install them separately
+            let srcinfo_output = Command::new("makepkg")
+                .arg("--printsrcinfo")
+                .current_dir(package_dir)
+                .output()?;
+
+            if srcinfo_output.status.success() {
+                let srcinfo = String::from_utf8_lossy(&srcinfo_output.stdout);
+                let deps: Vec<String> = extract_dependencies_from_srcinfo(&srcinfo);
+
+                if !deps.is_empty() {
+                    eprintln!("Dependencies needed: {:?}", deps);
+                    eprintln!("Attempting to install dependencies manually...");
+
+                    // Try to install dependencies using pacman first
+                    let mut deps_installed = true;
+                    for dep in &deps {
+                        // Check if dependency is already installed
+                        if !is_package_installed(dep)? {
+                            eprintln!("Installing dependency: {}", dep);
+                            match crate::pacman::install_packages(&[dep.clone()], &vec!["--noconfirm".to_string()]) {
+                                Ok(()) => {
+                                    info!("Dependency {} installed successfully", dep);
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to install dependency {}: {}", dep, e);
+                                    deps_installed = false;
+                                    break;
+                                }
+                            }
+                        } else {
+                            info!("Dependency {} already installed", dep);
+                        }
+                    }
+
+                    if deps_installed {
+                        // Try building again after installing dependencies
+                        eprintln!("Dependencies installed, retrying build...");
+                        let retry_status = Command::new("makepkg")
+                            .args(&args)
+                            .current_dir(package_dir)
+                            .status()?;
+
+                        if !retry_status.success() {
+                            return Err(KhazaurError::BuildFailed(
+                                format!("makepkg failed after installing dependencies: {}", retry_status),
+                            ));
+                        }
+
+                        info!("Package built successfully after dependency installation");
+                        return Ok(());
+                    }
+                }
+            }
+
             return Err(KhazaurError::BuildFailed(
                 "\nDependency installation failed.\n\n\
                  This can happen if you:\n\
@@ -52,6 +115,49 @@ pub fn build_and_install(package_dir: &Path, install: bool) -> Result<()> {
 
     info!("Package built successfully");
     Ok(())
+}
+
+/// Extract dependencies from srcinfo output
+fn extract_dependencies_from_srcinfo(srcinfo: &str) -> Vec<String> {
+    let mut deps = Vec::new();
+
+    // Parse the srcinfo to extract dependencies
+    for line in srcinfo.lines() {
+        let line = line.trim();
+
+        // Look for depends lines
+        if line.starts_with("depends = ") {
+            let dep = line.trim_start_matches("depends = ").trim();
+            if !dep.is_empty() && !deps.contains(&dep.to_string()) {
+                deps.push(dep.to_string());
+            }
+        }
+        // Look for makedepends lines
+        else if line.starts_with("makedepends = ") {
+            let dep = line.trim_start_matches("makedepends = ").trim();
+            if !dep.is_empty() && !deps.contains(&dep.to_string()) {
+                deps.push(dep.to_string());
+            }
+        }
+        // Look for checkdepends lines
+        else if line.starts_with("checkdepends = ") {
+            let dep = line.trim_start_matches("checkdepends = ").trim();
+            if !dep.is_empty() && !deps.contains(&dep.to_string()) {
+                deps.push(dep.to_string());
+            }
+        }
+    }
+
+    deps
+}
+
+/// Check if a package is installed using pacman
+fn is_package_installed(pkg_name: &str) -> Result<bool> {
+    let output = Command::new("pacman")
+        .args(["-Q", pkg_name])
+        .output()?;
+
+    Ok(output.status.success())
 }
 
 /// Build and install a package using makepkg, with optional make dependency removal

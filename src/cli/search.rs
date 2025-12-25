@@ -144,10 +144,7 @@ pub async fn search(
                 spinner.finish_and_clear();
                 if !packages.is_empty() {
                     println!("\n{}", ui::info(&format!("Debian Packages ({})", packages.len())));
-                    for pkg in packages {
-                        println!("  debian/{} {}", pkg.name, pkg.version);
-                        println!("    - {}", pkg.description);
-                    }
+                    println!("{}", ui::format_debian_packages(&packages));
                 }
             }
             Err(e) => {
